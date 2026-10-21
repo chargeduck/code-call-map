@@ -302,7 +302,7 @@ intellijPlatform {
     buildSearchableOptions = false
 
     pluginConfiguration {
-        // 发布坐标：id / name / version / vendor / description 与 plugin.xml 对应，
+        // 发布坐标：id / name / version / vendor 与 plugin.xml 对应，
         // version 由构建时从 gradle.properties 注入
         id = providers.gradleProperty("pluginId").get()
         name = providers.gradleProperty("pluginName").get()
@@ -311,10 +311,15 @@ intellijPlatform {
             name = providers.gradleProperty("pluginVendor").get()
             url = "https://github.com/chargeduck/codeCallMap"
         }
-        // description 在 kts 中直接书写（UTF-8），避免 gradle.properties 以 ISO-8859-1 读取中文导致乱码
-        description = "CodeCall Map - 开源的接口调用链路记录插件。以专用 Run/Debug 模式启动 Java 程序，" +
-                "通过 javaagent 自动插桩采集方法级调用链与每级耗时，" +
-                "支持 waterfall 瀑布图 / 时序图 / 耗时热点分析，快速定位性能卡点。"
+
+        // 刻意不在这里设置 description。
+        //
+        // 【踩过的坑】这里一旦赋值，patchPluginXml 会用这一句话覆盖
+        // plugin.xml 里的整个 <description>，导致：
+        //   1. plugin.xml 里写的富文本（列表、加粗）在插件市场全部丢失
+        //   2. 多语言完全失效 —— plugin_zh.xml / plugin_en.xml 被忽略，
+        //      中英文用户看到的都是这里的这一句
+        // 所以描述统一交给 plugin.xml（英文）与 plugin_zh.xml（中文）维护。
 
         ideaVersion {
             // 兼容版本下限由分支注入：master/support-253=253，support-233=233

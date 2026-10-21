@@ -421,11 +421,24 @@ val packageRelease by tasks.registering {
     val releaseDir = layout.projectDirectory.dir("release")
 
     doLast {
-        val source = distDir.get().asFile.listFiles { f -> f.extension == "zip" }
-            ?: emptyArray()
-        if (source.isEmpty()) {
-            throw GradleException("未找到插件 zip，请确认 buildPlugin 已成功执行")
+        // 按当前版本号精确匹配，不能取"第一个 zip"。
+        //
+        // 【踩过的坑】build/distributions/ 会保留历次打包的产物。
+        // 从 support-233 切到 support-253 后重新打包时，目录里同时存在
+        // codeCallMap-1.0.1.60-legacy.zip 和 codeCallMap-1.0.1.60.zip，
+        // 取 first() 会拿到上一个分支的包 —— 结果是 253 的 zip 里
+        // 装的却是 233 的插件（版本号 1.0.1.60-legacy、sinceBuild 233）。
+        val expected = distDir.get().asFile.resolve("codeCallMap-$version.zip")
+        if (!expected.isFile) {
+            val existing = distDir.get().asFile.listFiles { f -> f.extension == "zip" }
+                ?.joinToString("\n  ") { it.name } ?: "（目录不存在）"
+            throw GradleException(
+                "未找到 $version 的插件包: ${expected.name}\n" +
+                        "build/distributions 现有:\n  $existing\n" +
+                        "请确认 buildPlugin 已成功执行，或先执行 clean"
+            )
         }
+        val source = arrayOf(expected)
 
         // 分支名去掉连字符，避免文件名里分隔符过多（support-253 -> support253）
         val branch = try {

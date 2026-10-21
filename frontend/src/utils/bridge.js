@@ -29,22 +29,69 @@ function logError(...args) {
 /** 统计调用次数，排查"请求到底发没发出去"时很有用。 */
 let seq = 0
 
+/**
+ * 等待通信通道就绪，最多等 timeoutMs。
+ *
+ * <h2>为什么需要它</h2>
+ * {@code window.cefQuery} 由 CEF 在渲染进程启动时创建，而 Vue 应用可能在
+ * 它出现之前就发出首批请求（拉会话列表）。直接判断一次就报
+ * "通道未就绪"是错的 —— 通道通常只是晚了几十毫秒。
+ *
+ * 实测在 IDEA 2026.2 上这个时间差比 2025.x 更明显：页面渲染更快，
+ * 首屏请求更早，于是更容易抢在 cefQuery 创建之前。
+ *
+ * 用 50ms 轮询等待，既不会明显拖慢首屏，也不会因为时序抖动而失败。
+ */
+function waitForChannel(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const probe = () => {
+      if (typeof window.cefQuery === 'function') return window.cefQuery
+      if (typeof window.codeCallMapQuery === 'function') return window.codeCallMapQuery
+      return null
+    }
+
+    const found = probe()
+    if (found) {
+      resolve(found)
+      return
+    }
+
+    const startedAt = Date.now()
+    let tries = 0
+    const timer = setInterval(() => {
+      tries += 1
+      const ch = probe()
+      if (ch) {
+        clearInterval(timer)
+        log('通道就绪，等待了 ' + (Date.now() - startedAt) + 'ms（' + tries + ' 次探测）')
+        resolve(ch)
+        return
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        clearInterval(timer)
+        resolve(null)
+      }
+    }, 50)
+  })
+}
+
 export function cefCall(request) {
   const id = ++seq
   const startedAt = Date.now()
   log('→ 请求 #' + id, request)
 
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     // 通道选择：优先 window.cefQuery —— 它由 CefMessageRouter 在页面加载前
     // 就注册好，是 JCEF 原生通道，最可靠、少一层包装。
     // 远端/调试环境若没有它（例如在普通浏览器里打开页面），再退回
     // codeCallMapQuery（注入脚本提供的同语义别名）。
-    const channel = typeof window.cefQuery === 'function'
-      ? window.cefQuery
-      : (typeof window.codeCallMapQuery === 'function' ? window.codeCallMapQuery : null)
+    //
+    // 关键：不能只判断一次。首屏请求常常早于 CEF 创建好 window.cefQuery，
+    // 单次判断会把"晚几十毫秒"误报成"通道不存在"。
+    const channel = await waitForChannel()
 
     if (!channel) {
-      logError('请求 #' + id + ' 失败：未找到可用的桥接通道。'
+      logError('请求 #' + id + ' 失败：等待 3 秒后仍未找到可用的桥接通道。'
         + '当前可用通道=', {
           cefQuery: typeof window.cefQuery,
           codeCallMapQuery: typeof window.codeCallMapQuery,

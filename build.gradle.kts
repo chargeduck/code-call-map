@@ -40,6 +40,18 @@ val pluginFix: String = providers.gradleProperty("pluginFix").get()
 val pluginBuild: String = providers.gradleProperty("pluginBuild").get()
 
 /**
+ * 版本号后缀，可为空。
+ *
+ * <p>用于区分面向不同 IDEA 版本、但代码相同的两个分支。
+ * 若两个分支版本号完全相同，上传 JetBrains Marketplace 时会被判为
+ * 「同一版本重复发布」而拒绝，所以 233 分支用 `-legacy` 与 253 区分开。
+ *
+ * <p>配置在 gradle.properties 的 `pluginVersionSuffix`，留空即不加。
+ */
+val pluginVersionSuffix: String =
+    providers.gradleProperty("pluginVersionSuffix").getOrElse("").trim()
+
+/**
  * 完整的四段式版本号字符串。
  *
  * <p>用明确的 String 常量而不是直接读 `version`（Project 属性）：
@@ -47,7 +59,12 @@ val pluginBuild: String = providers.gradleProperty("pluginBuild").get()
  * 曾导致 agent jar 被打成 `codeCallMap-agent-extension 'pluginConfiguration'
  * property 'version'.jar` 这种错误文件名。
  */
-val pluginFullVersion: String = "$pluginMajor.$pluginFeature.$pluginFix.$pluginBuild"
+val pluginFullVersion: String = buildString {
+    append("$pluginMajor.$pluginFeature.$pluginFix.$pluginBuild")
+    if (pluginVersionSuffix.isNotEmpty()) {
+        append('-').append(pluginVersionSuffix)
+    }
+}
 version = pluginFullVersion
 
 repositories {

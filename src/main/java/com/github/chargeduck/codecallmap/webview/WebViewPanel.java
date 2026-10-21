@@ -122,21 +122,26 @@ public class WebViewPanel extends JPanel {
 
         SwingUtilities.invokeLater(() -> {
             try {
-                // 【关键】用 setUrl 在创建时就把页面传给 JCEF，而不是 build() 之后再 loadURL。
+                // 【关键修正】构建时【不能】用 setUrl 传页面地址。
                 //
-                // 原因：JCEF 创建 CefBrowser 是异步的，build() 返回时底层浏览器
-                // 往往还没就绪。此时立刻调 loadURL() 会被静默丢弃，
-                // 页面就停在 about:blank ——
-                // 实测 /json/list 里看到 url 为
-                //   file:///jbcefbrowser/xxx#url=about:blank
-                // 就是这个原因。页面空 → 没有 window.codeCallMapQuery →
-                // 前端报"cefQuery 不可用"，整条链路全断。
+                // 原因：setUrl 会让 JCEF 在 build() 时就启动渲染进程并开始加载，
+                // 而渲染进程启动时会检查客户端上是否已注册 cefQuery 路由 ——
+                // 页面里的 window.cefQuery 只在那时创建一次。
+                // 我们的 installMessageRouter() 在 build() 之后才执行，
+                // 此时渲染进程已经跑起来了，路由注册被当成"太晚"而忽略，
+                // 页面里永远没有 window.cefQuery。
                 //
-                // setUrl 交给 JCEF 自己处理时序，它在浏览器就绪后才真正导航。
+                // 实测表现（IDEA 2026.2）：面板能打开、页面正常渲染，
+                // 但所有请求都报"通信通道未就绪（cefQuery 不存在）"，
+                // 会话列表永远为空。2025.2 上因为渲染进程启动稍慢而碰巧能成功，
+                // 这也是"沙箱里好、真实环境坏"的根源。
+                //
+                // 正确顺序（与 xechat-idea-webview 一致）：
+                //   1. build() 出空浏览器（不带 URL）
+                //   2. 注册 CefMessageRouter
+                //   3. 注册 load 回调
+                //   4. 最后才 loadURL 导航
                 JBCefBrowserBuilder builder = new JBCefBrowserBuilder();
-                if (pageUrl != null) {
-                    builder.setUrl(pageUrl);
-                }
                 browser = builder.build();
                 // 加大 JS 查询池：CefMessageRouter 的并发查询走这个池。
                 // 取不到属性说明该平台版本没有它，不影响主流程。
@@ -155,32 +160,16 @@ public class WebViewPanel extends JPanel {
 
                 // 建立 JS → Java 通道。
                 //
-                // 关键点：CefMessageRouter 必须在 loadURL 之前注册。
-                // 渲染进程启动时会检查客户端上有没有同名路由，
-                // 只有存在才会在页面里创建全局 window.cefQuery。
-                // 这也是参考项目 xechat-idea-webview 的做法（同环境已验证可用）。
+                // 【顺序不能变】此时浏览器已建好但仍指向 about:blank，
+                // 渲染进程尚未加载任何页面。在这里注册 CefMessageRouter，
+                // 之后首次 loadURL 时渲染进程才会在页面里创建
+                // window.cefQuery。反过来（先加载、后注册）就永远没有。
                 installMessageRouter();
 
-                // 【关键修正】改为「先正常 loadURL 加载页面，加载完成后再注入桥接」。
-                //
-                // 之前走的是「把桥接脚本拼进 HTML 再 loadHTML」，
-                // 这个方案有致命缺陷：loadHTML 不指定 base URL 时页面在
-                // about:blank 上下文里运行，页面里的相对资源、以及
-                // JBCefJSQuery 生成函数所依赖的上下文都可能不可用，
-                // 结果是 window.cefQuery 始终不存在 ——
-                // 前端报「window.cefQuery 不可用」，会话列表永远为空。
-                //
-                // 现在的做法：
-                //   1. loadURL(pageUrl) 让页面在正确的 file:// 上下文里运行；
-                //   2. 监听加载完成（CefLoadHandler.onLoadEnd），
-                //      再用 executeJavaScript 把桥接脚本写进页面。
-                // 两条路径都只用 IntelliJ 官方封装，且执行时机确定。
+                // 注册加载完成回调：onLoadEnd 时注入桥接脚本。
+                // 必须在 loadURL 之前注册，否则首轮加载完成事件会漏掉。
                 if (pageUrl != null) {
                     installLoadHandler();
-                    // setUrl 在 build() 时就开始加载，而监听器是 build() 之后才注册的，
-                    // 首轮 onLoadEnd 可能已经错过。因此在注册完监听器后
-                    // 再主动导航一次，保证 onLoadEnd 一定被我们捕获到。
-                    // （桥接注入是幂等的，多一次导航不会重复注入）
                     browser.getCefBrowser().loadURL(pageUrl);
                     log.info("[CodeCallMap] 已发起页面加载: {}", pageUrl);
                 } else {
@@ -359,9 +348,20 @@ public class WebViewPanel extends JPanel {
         } catch (Throwable t) {
             log.warn("[CodeCallMap] 注册页面加载回调失败，改用定时注入", t);
         }
-        // 兜底：万一 onLoadEnd 没触发（CEF 版本差异），用定时器补一次
-        javax.swing.Timer timer = new javax.swing.Timer(1500, e -> installBridge());
-        timer.setRepeats(false);
+        // 兜底：万一 onLoadEnd 没触发（CEF 版本差异 / 首轮加载过快），
+        // 用重复定时器补注入，直到注入成功为止。
+        //
+        // 只跑一次的话，1500ms 时页面可能还没加载完 ——
+        // executeJavaScript 打在不存在的文档上会静默失败，
+        // 之后就再没有第二次机会，表现为"页面正常但收不到数据"。
+        javax.swing.Timer timer = new javax.swing.Timer(500, e -> {
+            installBridge();
+            if (bridgeInstalled) {
+                ((javax.swing.Timer) e.getSource()).stop();
+            }
+        });
+        timer.setRepeats(true);
+        timer.setInitialDelay(500);
         timer.start();
     }
 

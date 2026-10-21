@@ -1,0 +1,17 @@
+<idea-plugin>
+    <!--
+      Spring Boot 插件存在时才加载的配置。
+
+      目前这里是空的，但文件必须存在 —— plugin.xml 里
+      <depends optional="true" config-file="codecallmap-springboot.xml">
+      引用它，缺失会导致整个插件加载失败。
+
+      为什么用 optional + config-file 这种形式：
+      IntelliJ 的可选依赖只有在目标插件<b>存在</b>时才应用这个 config-file，
+      并且会同时把 CCM 的类加载器与 Spring Boot 插件的类加载器打通。
+      这正是 SpringBootJmxBridge 里 Class.forName 能成功的前提。
+
+      将来如果要把「JMX 端口号」相关的扩展点单独注册，
+      就写在这个文件里，从而保证它们只在装了 Spring Boot 时生效。
+    -->
+</idea-plugin>

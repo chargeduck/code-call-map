@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+
+# IntelliJ Platform Gradle Plugin
+.intellijPlatform/
+
+# IDE
+.idea/
+*.iml
+out/
+*.log
+*.txt
+
+
+# OS
+.DS_Store
+Thumbs.db
+
+# frontend
+dist/
+node_modules
+temp/
+# 本地发布产物
+release/
+
+# 插件运行时生成的数据目录（录制文件、调试信息、配置）
+.callmap/

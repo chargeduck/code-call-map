@@ -1,0 +1,196 @@
+name: Release
+
+# 打 tag 时自动构建两个平台版本的插件包，并发布到 GitHub Release。
+#
+# 为什么是两个版本：
+#   项目的 master 与 support-233 面向 IDEA 2025.2（IC，Community 分发），
+#   support-253 面向 IDEA Ultimate 2025.3.1（IU）。
+#   两者的 platformVersion / sinceBuild 不同，编译出的插件无法互相替代 ——
+#   装错版本时 IDEA 会提示 "plugin is not compatible with this IDE"，
+#   或者更糟：能装上但 JCEF 等 API 行为不一致，出现难查的运行时问题。
+#
+# 触发方式：
+#   git tag v0.4.2.46 && git push origin v0.4.2.46
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# 同一 tag 重复推送时，取消上一次未完成的运行，避免两个任务同时写同一个 Release
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  # 创建 Release 与上传附件需要写权限
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # 阶段一：两个平台并行构建
+  # ------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.branch }})
+    runs-on: ubuntu-latest
+    strategy:
+      # 一个平台失败时另一个继续，便于判断是哪边的问题
+      fail-fast: false
+      matrix:
+        include:
+          - branch: master
+            platform: IC 2025.2
+            # 与 gradle.properties 的 platformType/platformVersion 拼成的文件名片段一致，
+            # 用于校验产物名（见 Verify artifact name 步骤）
+            platform_type: IC2025.2
+          - branch: support-253
+            platform: IU 2025.3.1
+            platform_type: IU2025.3.1
+
+    steps:
+      # fetch-depth: 0 是必须的 —— packageRelease 任务里会执行
+      # git rev-parse --abbrev-ref HEAD 取分支名，用于生成 zip 文件名。
+      # 浅克隆下这个命令可能拿不到正确的分支信息。
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0
+
+      # 项目要求 JDK 21（build.gradle.kts 里 sourceCompatibility = VERSION_21），
+      # 用 JDK 17 会直接编译失败。
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # 缓存 Gradle 依赖与 wrapper，第二次起构建快很多。
+          # IntelliJ Platform 分发包体积大（~1GB），这个缓存收益明显。
+          cache-read-only: false
+
+      # gradlew 在 Windows 上提交时可能丢了可执行位
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # 构建前先跑测试。CI 的价值有一半在这里：
+      # 打出来的包如果测试不通过，宁可不发布。
+      - name: Run unit tests
+        run: ./gradlew unitTest --no-daemon
+        env:
+          # 沙箱平台下载失败时给出更明确的重试信息
+          GRADLE_OPTS: -Dorg.gradle.internal.http.connectionTimeout=120000
+
+      # packageRelease = buildPlugin + 复制到 release/ 并重命名。
+      # 产物名形如 codeCallMap-0.4.2.46-support253-IU2025.3.1.zip，
+      # 一眼能看出是哪个分支、哪个平台。
+      - name: Build plugin
+        run: ./gradlew packageRelease --no-daemon
+        env:
+          GRADLE_OPTS: -Dorg.gradle.internal.http.connectionTimeout=120000
+
+      # 防呆：产物名里的平台标识必须与矩阵声明的一致。
+      # packageRelease 依赖 git rev-parse 取分支名，一旦在 CI 里取到 HEAD
+      # 或空值，文件名就会变成 ...-unknown-...，两个平台的包也可能重名覆盖。
+      # 这里提前失败，比发出去一个名字错误的包好。
+      - name: Verify artifact name
+        run: |
+          set -euo pipefail
+          echo "生成的文件："
+          ls -1 release/*.zip
+          shopt -s nullglob
+          found=0
+          for f in release/*.zip; do
+            case "$f" in
+              *"${{ matrix.platform_type }}"*) found=1 ;;
+            esac
+          done
+          if [ "$found" -ne 1 ]; then
+            echo "::error::产物文件名里没有找到平台标识 ${{ matrix.platform_type }}，"
+            echo "::error::实际文件：$(ls -1 release/*.zip)"
+            exit 1
+          fi
+          # 文件大小下限校验：正常打出的插件包在 1MB 以上，
+          # 明显偏小说明前端资源没打进去或构建被截断。
+          size=$(stat -c%s release/*.zip | head -1)
+          echo "包体积：$size 字节"
+          if [ "$size" -lt 500000 ]; then
+            echo "::error::产物只有 $size 字节，明显异常（前端资源可能未打入）"
+            exit 1
+          fi
+
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # 用 filename 区分两个平台的产物，避免 artifact 重名
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.branch }}
+          path: |
+            release/*.zip
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  # ------------------------------------------------------------------
+  # 阶段二：汇总两个产物，创建 Release
+  # ------------------------------------------------------------------
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 把两个平台构建出的 zip 都下载到同一个目录，
+      # 后面一次性上传到同一个 Release。
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      # 用 softprops/action-gh-release 而不是 gh release create：
+      # 前者能一次上传多个文件并自动处理已存在 Release 的覆盖逻辑，
+      # 后者需要额外判断 Release 是否已存在。
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          # 从 CHANGELOG.md 提取当前版本的说明；提不出来就用默认文案
+          body: |
+            ## 下载说明 / Download guide
+
+            两个版本对应不同的 IDEA 版本，**请按你的 IDE 选择**：
+
+            | 文件 | 目标 IDE | Platform |
+            |---|---|---|
+            | `*support253-IU2025.3.1.zip` | IDEA **Ultimate** 2025.3+ | IU 2025.3.1 |
+            | `*master-IC2025.2.zip` | IDEA Community / Ultimate 2025.2+ | IC 2025.2 |
+
+            > 安装错版本时 IDEA 会提示不兼容，或出现 JCEF 相关异常。
+            > 安装方式：`Settings → Plugins → ⚙ → Install Plugin from Disk...`
+
+            ---
+
+            版本变更见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md)。
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

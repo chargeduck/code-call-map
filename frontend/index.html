@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCall Map - 调用时序图</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1e1f22; color: #c8c8c8; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; font-size: 13px; }
+        #app { height: 100vh; }
+        #error-box { display: none; padding: 20px; color: #f56c6c; white-space: pre-wrap; font-size: 13px; }
+    </style>
+    <script>
+        // 捕获 JS 运行时错误（仅写入 error-box，不调用 console 避免 JCEF 二次报错）
+        window.onerror = function (msg, url, line, col, error) {
+            const box = document.getElementById('error-box')
+            if (!box) return false;
+            box.style.display = 'block';
+            box.textContent = 'JS Error: ' + msg + '\nFile: ' + url + '\nLine: ' + line + ':' + col;
+            if (error) {
+                box.textContent += '\n\n' + (error.name || 'Error') + ': ' + (error.message || '');
+                if (error.stack) box.textContent += '\n\nStack:\n' + error.stack;
+            }
+            return true;
+        };
+        // 捕获资源加载错误
+        window.addEventListener('error', function (e) {
+            if (e.target !== window) {
+                const box = document.getElementById('error-box')
+                if (box && box.style.display !== 'block') {
+                    box.style.display = 'block';
+                    box.textContent = 'Resource Error: ' + (e.target.tagName || '?') + ' ' + (e.target.src || e.target.href || '');
+                }
+            }
+        }, true);
+        // 捕获未处理的 Promise rejection
+        window.addEventListener('unhandledrejection', function (e) {
+            const box = document.getElementById('error-box')
+            if (box && box.style.display !== 'block') {
+                box.style.display = 'block';
+                box.textContent = 'Unhandled Rejection: ' + (e.reason && e.reason.stack ? e.reason.stack : String(e.reason));
+            }
+        });
+    </script>
+</head>
+<body>
+    <div id="app">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:#888;font-size:14px;">
+            <div>加载中...</div>
+        </div>
+    </div>
+    <div id="error-box"></div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

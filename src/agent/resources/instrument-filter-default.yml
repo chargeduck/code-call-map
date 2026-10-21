@@ -1,0 +1,141 @@
+# CodeCallMap 插桩过滤规则（默认值）
+#
+# 这个文件打包在 agent jar 内，是"最后兜底"的默认配置。
+# 覆盖优先级（越靠前越优先）：
+#   1. -Dcallmap.filter.file=<路径>
+#   2. <项目根>/.callmap/instrument-filter.yml
+#   3. <用户主目录>/.codecallmap/instrument-filter.yml
+#   4. 本文件
+#
+# 也就是说：想把规则改掉，只需要在项目里放一个
+# .callmap/instrument-filter.yml，不必改插件、不必重装。
+
+# ---- 采集白名单（推荐填写） ----
+# 只采集这些包前缀下的类。
+#
+# 留空时的行为：
+#   从启动类（sun.java.command）自动推导业务包，例如
+#   com.github.chargeduck.DemoApplication → 自动采集 com.github.chargeduck 及其子包。
+#   推导不出来时退化为"除 exclude 外全部采集"（旧行为）。
+#
+# 为什么要用白名单而不是"排除三方库"：
+#   三方库无穷无尽，黑名单永远列不完。实测按黑名单策略会接连撞上
+#   Tomcat → micrometer → flowable……每次都是应用起不来。
+#   白名单只碰用户自己的代码，风险从根上消失，插桩的类数也从上千降到几十。
+#
+# 写法：一行一个包前缀，覆盖主类所在包即可
+#   include:
+#     - com.github.chargeduck
+#     - com.acme.frm
+include:
+
+# ---- 永不插桩的黑名单 ----
+# 这里的条目享有最高优先级：即使 include 里写了，也会被排除。
+#
+# 注意：这不是"少记录几个方法"的性能取舍，而是正确性问题。
+# 插桩类加载器相关实现会改变类定义时机，导致
+#   LinkageError: attempted duplicate abstract class definition
+# 应用直接起不来（Tomcat 的 WebappClassLoaderBase 就是典型）。
+exclude:
+  # ---- 数据载体包（POJO / DTO / VO / Entity）----
+  # 为什么要排掉：实测某项目 210 个插桩类里，domain.entity / domain.dto / domain.vo
+  # 合计占了 71% 的方法数（1145 + 782 + 468 = 2395 / 3368）。
+  # 这些类全是 getter / setter / builder，不可能成为性能瓶颈，
+  # 却让每个调用多付一次 methodEnter + TraceContext.enter，
+  # 而且最终几乎都被 minDurationMs 过滤丢弃 —— 纯付出、零收益。
+  #
+  # 写法说明：支持 * 通配（匹配任意字符，可跨包路径段）。
+  #   *.domain.entity.  → 匹配「包路径以 domain.entity 结尾」的类，
+  #                       即 entity 是一个完整的包段，且类直接位于其中。
+  #   *.domain.dto.*    → 匹配 domain.dto 下【所有层级】的类（dto.query / dto.save ...）
+  # 注意末尾的点不能省：*.entity. 不会误伤 com.x.entityutil 这种同名前缀的包。
+  # 规则按「包段」语义匹配，不要求类名以字面量结尾 ——
+  #   *.domain.entity. 对 cn.com.a.domain.entity.SysUser 是匹配的。
+  - "*.domain.entity."
+  - "*.domain.dto.*"
+  - "*.domain.vo."
+  - "*.domain.po."
+  - "*.domain.pojo.*"
+  - "*.obj.*"
+  - "*.model.po.*"
+  # JDK 自身
+  - java.
+  - javax.
+  - jdk.
+  - sun.
+  - com.sun.
+  # 第三方语言运行时
+  - kotlin.
+  - scala.
+  - groovy.
+  # 字节码库自身（防递归）
+  - org.objectweb.asm.
+  - net.bytebuddy.
+  # 本插件自身
+  - com.github.chargeduck.codecallmap.
+  # 日志框架
+  - org.slf4j.
+  - ch.qos.logback.
+  - org.apache.logging.log4j.
+  # IDE 内部
+  - com.intellij.
+  - org.intellij.
+  - org.jetbrains.
+  # Spring 框架（业务方法是用户自己的类，框架内部记录价值低且噪音大）
+  #
+  # ⚠️ 注意 DispatchServlet 是 HTTP 入口探针的【唯一来源】。
+  # 它必须从黑名单里单独放行，否则每个请求都没有根节点、没有 path，
+  # 前端只能看到一堆互不相连的中间层碎片 —— 这个坑踩过两次：
+  # 表现为"调了接口但页面上没有调用链"。
+  # 放行由 InterfaceProbes 的白名单式精确匹配完成（只插 doDispatch/doService），
+  # 因此不需要把整个 org.springframework.web.servlet 打开。
+  - org.springframework.
+  - com.fasterxml.jackson.
+  # ---- Web 容器 ----
+  # Tomcat 类加载器体系是绝对禁区
+  - org.apache.catalina.
+  - org.apache.tomcat.
+  - org.apache.coyote.
+  - org.apache.jasper.
+  - org.apache.el.
+  - org.apache.juli.
+  - org.eclipse.jetty.
+  - io.undertow.
+  - org.jboss.
+  # ---- 基础设施 ----
+  - com.zaxxer.hikari.
+  - org.apache.commons.dbcp
+  # ---- 可观测性 / 指标 ----
+  # micrometer 是 Spring Boot Actuator 的指标库。
+  # 它的 Validated 接口曾被插桩，JVM 报
+  #   LinkageError: duplicate interface definition
+  # ——接口/注解类已在插桩器里统一跳过，这里再加包级排除。
+  - io.micrometer.
+  - io.opentelemetry.
+  - io.prometheus.
+  - io.micrometer.shaded.
+  # ---- 常见第三方库 ----
+  # 这些库内部逻辑不是业务瓶颈，插桩只会让噪音变大、启动变慢
+  - org.apache.commons.
+  - org.apache.http.
+  - org.apache.ibatis.
+  - org.mybatis.
+  - com.baomidou.
+  - com.alibaba.
+  - com.google.
+  - com.netflix.
+  - io.netty.
+  - okhttp3.
+  - retrofit2.
+  - reactor.
+  - io.reactivex.
+  - org.hibernate.
+  - org.hibernate.validator.
+  - ognl.
+  - freemarker.
+  - org.thymeleaf.
+  - liquibase.
+  - org.flywaydb.
+  - com.github.pagehelper.
+  - cn.hutool.
+  - org.projectlombok.

@@ -1,0 +1,475 @@
+<idea-plugin>
+    <id>com.github.chargeduck.codecallmap.plugin</id>
+    <name>CodeCall Map</name>
+    <vendor email="dev@codecallmap.com" url="https://github.com/chargeduck/codeCallMap">CodeCallMap Team</vendor>
+
+    <description><![CDATA[
+        <h2>CodeCall Map</h2>
+        <p>开源的接口调用链路记录插件，专为「定位程序哪里耗时」设计。</p>
+        <ul>
+            <li><b>专用 Run/Debug 模式</b>：Run 配置下拉选择 CodeCallMap 即可启动，
+                自动注入 javaagent；Debug 启动同样生效，可直接在耗时方法上下断点。</li>
+            <li><b>自动探测插桩包名</b>：无需手工配置——插件会根据 Main class 所在包
+                与模块源码根自动推导出要监控的包（类比 Spring 的 @ComponentScan），
+                也可在配置里手工指定或自动+补充。</li>
+            <li><b>自动插桩采集</b>：基于 ASM 做方法级字节码插桩，无需任何手工埋点，
+                自动记录调用树与每级耗时。</li>
+            <li><b>耗时热点分析</b>：按「自身耗时 = 总耗时 − 子调用耗时」排序，
+                直接指出「自己慢」的方法，并可按类聚合。</li>
+            <li><b>瀑布图 / 时序图</b>：可视化调用关系与时间轴，异常与慢调用高亮。</li>
+            <li><b>点击跳转源码</b>：从任意 Span 直接跳到对应方法所在行。</li>
+        </ul>
+        <p>适用于 IntelliJ IDEA 2025.2 及以上版本（Community / Ultimate）。</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <ul>
+            <li><b>0.4.2.46</b>：<b>修复卡死的真正主因 —— 菱形引用指数级展开</b>。
+                <br>· 上一版把深度检查提前后仍在卡。看门狗第二次抓到的栈显示
+                递归只有约 55 层（未超上限），但栈顶是
+                <code>AbstractStringBuilder.append</code> 的扩容拷贝 ——
+                说明问题不是"层数太多"，而是"同一层被反复展开"；
+                <br>· 根因：<code>seen</code> 在 <code>finally</code> 里
+                <code>remove(v)</code>，语义是"只防当前路径上的真循环"。
+                于是同一对象被多个字段引用时（菱形引用），
+                每条路径都会把它完整展开一遍，次数随层数<b>指数增长</b>。
+                实测 40 层、每层两个字段指向同一子 Map，耗时 <b>9.4 秒</b>
+                且结果因超长被丢弃。而 MyBatis 的
+                <code>Configuration</code>、Spring 的 <code>BeanDefinition</code>、
+                JDBC 驱动内部结构都是这种多引用结构，层数远不止 40；
+                <br>· 修复：<code>seen</code> 登记后<b>不再移除</b> ——
+                一个对象在整个序列化过程中只展开一次，重复出现写
+                <code>&lt;duplicate&gt;</code>。复杂度从指数降到线性；
+                <br>· 另加一道 O(1) 熔断：累计超过 8MB 立即停手并返回合法标记，
+                正常业务对象远达不到阈值（"1MB 请求体完整保留"的场景不受影响），
+                但能保证极端情况下不再拖死主线程。</li>
+            <li><b>0.4.1.45</b>：<b>修复启动卡死 60+ 秒</b>（入参序列化无限递归 + 正则重复编译）。
+                <br>· 看门狗抓到的线程栈显示 main 线程卡在
+                <code>ArgSerializer.appendValue &lt;-&gt; appendBean</code>
+                反复递归，之间夹着
+                <code>SensitiveFieldMasker.isSensitiveKey</code> 的
+                <code>String.replaceAll</code>，栈深达 175 帧；
+                <br>· 原因一：<b>深度上限被绕过</b> —— 检查写在数组/集合/Map 分支<b>之后</b>，
+                而深层嵌套恰恰多由 Map/List 构成（如 MyBatis 的
+                <code>Invocation</code> 牵扯整棵 <code>Configuration</code>），
+                那些分支在检查前就 return 了，实测递归到 87 层。
+                现已把深度检查提到所有容器分支之前；
+                <br>· 原因二：<b>敏感字段判断每次编译正则</b> ——
+                内部用 <code>key.replaceAll("[_-]", "")</code>，
+                还对每个关键字各调一次，一次判断 30+ 次正则编译。
+                而它处在每个字段的热路径上。已改为预编译 Pattern +
+                启动时算好的归一化关键字数组；
+                <br>· 深度截断时改输出<b>类型与规模摘要</b>
+                （如 <code>&lt;java.util.LinkedHashMap size=42 已达深度上限，未展开&gt;</code>），
+                <b>不调用 toString()</b> —— 框架对象的 toString 往往要遍历整个对象图，
+                会在想止损的地方再引发一次卡顿；
+                <br>· 顺带修复插桩清单的包统计：类名是 ASM 斜杠格式，
+                按 <code>.</code> 切分导致 200 个类全归到 <code>(default)</code>，
+                统计完全失效。现已统一转点分。</li>
+            <li><b>0.4.0.44</b>：新增<b>插桩清单</b> <code>.callmap/instrument-report.txt</code>，
+                一眼看清 agent 到底改了哪些类和方法。
+                <br>· 内容含三部分：<b>汇总</b>（插桩类数/方法数）、
+                <b>按包统计</b>（一眼看出范围是否失控）、
+                <b>明细</b>（每个类下逐个方法，标注 <code>business</code> /
+                <code>DB</code> / <code>HTTP</code> 角色与描述符）；
+                <br>· 写入两个时机：启动后 <b>20 秒</b>先落盘一次（运行中即可打开查看），
+                退出时再写最终状态；
+                <br>· 只统计<b>真正改写了字节码</b>的类 —— 被过滤器排除的不列入，
+                所以"某方法没出现在清单里"即可直接判定为未被插桩，
+                不必反复重启试探；
+                <br>· 单文件上限 20000 条，超出会在文件里明确标注，
+                不静默丢弃；写入失败不影响目标应用。</li>
+            <li><b>0.3.3.43</b>：新增<b>采集停摆看门狗</b>，卡死时自动输出全线程栈。
+                <br>· 上一版只加了"慢调用告警"，但它挂在 <code>emit</code> 上 ——
+                如果方法卡在<span>进入与退出之间</span>（根本不返回），
+                <code>emit</code> 永远不会被调用，告警也就不会触发，
+                现场依然是一片空白；
+                <br>· 看门狗独立线程每 15 秒检查一次"距上次写出 span 已过多久"，
+                超过阈值即打印<b>所有线程</b>的名称、状态与栈帧（每线程最多 30 帧），
+                只在首次触发时完整输出一次，避免刷屏；
+                <br>· 仅在<b>写出过第一条 span 之后</b>才生效 ——
+                否则 Spring Boot 启动十几秒的阶段会误报；
+                <br>· 诊断全部走 stderr，不依赖目标应用的日志框架，
+                也不会修改任何业务状态（线程为 daemon，不阻止 JVM 退出）。</li>
+            <li><b>0.3.2.42</b>：<b>新增卡顿自诊断，便于定位"加了 agent 就卡住"</b>。
+                <br>· 退出时统计并输出<b>插桩累计耗时</b>
+                （<code>采集统计: ... 插桩累计耗时 N ms</code>）。
+                这是判断"是否插桩拖慢"的直接证据：若只有几百毫秒，
+                说明长时间空白与插桩无关；
+                <br>· 新增<b>慢调用告警</b>：任何被插桩方法单次耗时超过 3 秒，
+                立即向 stderr 打印方法名、耗时、线程名与当前线程栈，
+                无需再手动 jstack；
+                <br>· <code>callerFrame()</code> 改用 <code>new Throwable()</code>
+                取栈，替代开销更大的 <code>Thread.currentThread().getStackTrace()</code>
+                （后者在深栈场景下要构造整个栈数组，
+                而它出现在每一个要记录的方法退出路径上）。</li>
+            <li><b>0.3.1.41</b>：<b>类扫描性能优化</b>，启动阶段不再对每个类做两次字节码解析。
+                <br>· 问题：<code>shouldInstrument</code> 里
+                <code>isClassLoaderSubclass</code> 与 <code>implementsProbeInterface</code>
+                各 <code>new ClassReader</code> 一次（完整解析常量池），
+                且都排在白名单前缀判断<b>之前</b>。
+                实测一个 Spring Boot 项目启动要过 7909 个类，
+                其中绝大多数是与本项目无关的三方库，等于白做近 1.6 万次 ASM 解析；
+                <br>· 优化：先用类名字符串做廉价前缀判断，能排除的直接返回。
+                探针候选包清单<b>从 <code>InterfaceProbes.rules()</code> 自动推导</b>
+                再补充常见驱动包，规则增删后无需同步维护第二份清单。
+                实测可跳过约 <b>80%</b> 的类；
+                <br>· 风险控制：新增回归测试
+                <code>probePackagesSurviveCheapPrefixFilter</code>，
+                确认 Postgres/MySQL/Druid/Spring MVC/MyBatis 等探针类
+                不会被前缀预判误杀（误杀会导致 SQL 静默不采集）。</li>
+            <li><b>0.3.0.40</b>：<b>入参改为外置 JSON 文件，完整保留不再截断</b>，
+                并修复由此引发的 JSON 语法错误。
+                <br>· <b>完整性问题</b>：此前对入参设了 4 层深度 / 4000 字符 /
+                20 个元素的上限，超限截断。结果一个 1MB 的请求体被削到几千字节，
+                一个上万条的 List 只留前 20 条 —— <b>分析时信息是残缺的</b>。
+                现在<b>取消全部长度裁剪</b>，1MB 级入参也原样保全；
+                <br>· <b>存储方式</b>：入参写到
+                <code>.callmap/args/&lt;spanId&gt;.json</code>，
+                JSONL 里只记 <code>argsFile</code> 引用与 <code>argsSize</code>，
+                主文件保持轻量可逐行解析，回放时按 spanId 直接取；
+                前端加载时由插件读取文件并内联成 <code>args</code> 字段，表格照常展示；
+                <br>· <b>修复 4 处会产生非法 JSON 的缺陷</b>（都会让整次录制打不开）：
+                拼接后 substring 截断切坏括号、超长时直接 return 留下
+                <code>"key":</code> 后面空着、Map 超限写裸片段
+                <code>{"a":1,...(5)}</code>、数组超限写 <code>[...(500)]</code>；
+                <br>· 唯一保留的深度上限提到 64 层，仅作防栈溢出的安全阀，
+                触发时降级为字符串且字段名保留，不丢信息。</li>
+            <li><b>0.2.1.39</b>：修复开发期 Registry 配置<b>只写入了调试端口</b>的问题。
+                <br>· 原因：<code>seedSandboxRegistry</code> 只从命令行
+                <code>-PjcefRegistry</code> 取值，写在
+                <code>gradle.properties</code> 里的配置不生效，
+                用户配了 4 个键却只有 <code>debug.port</code> 落盘；
+                <br>· 现在 <code>gradle.properties</code> 直接维护默认值，
+                四个 JCEF 开关全部自动写入：
+                <code>debug.port</code> /
+                <code>contextMenu.devTools.enabled</code> /
+                <code>gpu.disable</code> /
+                <code>osr.enabled</code>；
+                <br>· 命令行 <code>-P</code> 仍可临时覆盖，优先级高于配置文件。</li>
+            <li><b>0.2.0.38</b>：<b>开发期 Registry 配置自动注入</b>，
+                不再需要每次手工在 Registry 面板里重设 JCEF 调试端口。
+                <br>· 新增 Gradle 任务 <code>seedSandboxRegistry</code>，
+                在 <code>prepareSandbox</code> 后自动把
+                <code>ide.browser.jcef.debug.port</code> 写入沙箱 IDE 的
+                <code>config/options/ide.general.xml</code>（<code>source="USER"</code>），
+                等价于手工设置；沙箱重建后也自动恢复；
+                <br>· 键与值在 <code>gradle.properties</code> 的
+                <code>jcefDebugPort</code> 配置；其他排障开关可用
+                <code>-PjcefRegistry="键=值,键=值"</code> 追加；
+                <br>· 同时修正两处键名误用：不存在 <code>ide.browser.jcef.gpu.enable</code>
+                （只有 <code>gpu.disable</code>），
+                <code>contextMenu.devTools.enabled</code> 默认已是开启。
+                写不存在的键 IDE 会静默忽略，故在 build 脚本内附了从 IDE
+                常量池提取的真实键名清单。</li>
+            <li><b>0.1.7.37</b>：<b>通信通道改用 JCEF 原生 CefMessageRouter</b>，彻底解决
+                前端报 <code>window.cefQuery 不可用</code> 与
+                <code>ReferenceError: request is not defined</code>。
+                <br>· 与之前做法（{@code JBCefJSQuery.inject}）的本质区别：
+                在 <code>loadURL</code> <b>之前</b>向 CefClient 注册名为
+                <code>cefQuery</code> 的消息路由，渲染进程启动时发现该路由，
+                就会在页面里创建全局 <code>window.cefQuery</code>。
+                页面一加载即可直接通信，<b>不再需要注入任何由 Java 侧生成的代码</b>；
+                <br>· 这消除了本版本反复踩的三个坑：
+                inject 产物的形态随版本变化（<code>request is not defined</code> 的根因）、
+                注入时机要自己掌握（早了 window 还没建好、晚了前端已发过请求）、
+                以及自定义适配层与原生 <code>cefQuery</code> 互相指向导致无限递归；
+                <br>· 做法对齐同环境已验证可用的 xechat-idea-webview 插件；
+                <br>· 前端通道选择改为<b>优先 <code>window.cefQuery</code></b>，
+                <code>codeCallMapQuery</code> 仅作别名兜底。</li>
+            <li><b>0.1.6.36</b>：<b>修正对 JBCefJSQuery.inject 的用法错误</b>
+                （控制台报 <code>Uncaught ReferenceError: request is not defined</code>）。
+                <br>· 一直误以为 <code>inject("request")</code> 生成的是
+                <code>function &lt;funcName&gt;(request, callback){...}</code>，
+                于是按名字去调用它。反编译确认<b>这是错的</b>：
+                <code>inject(x)</code> 实际等价于
+                <code>inject(x, "function(response) {}", "function(error_code, error_message) {}")</code>，
+                它接收三个参数 —— <b>请求变量名、成功回调函数体、失败回调函数体</b>，
+                生成的是一段<b>调用表达式</b>（把请求发出去），
+                不是一个可供调用的具名函数。按函数调用它必然报
+                <code>request is not defined</code>；
+                <br>· 改为用三参重载，两个回调由我们提供完整函数体，
+                由 JCEF 原样拼进生成的代码，不再猜测产物形态；
+                <br>· 仍<b>不覆盖</b> <code>window.cefQuery</code>
+                （inject 产物内部依赖它，覆盖会自我递归），
+                只额外提供 <code>window.codeCallMapQuery</code> 作为专属通道；
+                <br>· 用 Node 端到端验证生成的脚本：正常请求、失败回调、
+                <code>cefQuery</code> 缺失时的降级路径均正确。</li>
+            <li><b>0.1.5.35</b>：<b>修复前端页面停在 about:blank</b>（这是"cefQuery 不可用"的真正根源），
+                并修正 DevTools 调试地址。
+                <br>· <b>页面未加载</b>：<code>/json/list</code> 里页面 URL 显示为
+                <code>file:///jbcefbrowser/xxx#url=about:blank</code>，说明
+                <code>build()</code> 之后立刻调用的 <code>loadURL()</code> 被静默丢弃 ——
+                JCEF 创建 CefBrowser 是异步的，此时底层浏览器还没就绪。
+                改为用 <code>JBCefBrowserBuilder.setUrl(pageUrl)</code> 在创建时
+                就传入地址，让 JCEF 自己处理时序；注册完 onLoadEnd 监听后再
+                主动导航一次，确保能捕获到加载完成事件；
+                <br>· <b>调试地址</b>：原来输出
+                <code>chrome-devtools://devtools/bundled/inspector.html?ws=...</code>，
+                这个协议是 Chrome 内部专用，从外部粘到地址栏常被当成搜索词
+                （表现为"跳到 Google 搜索结果"）。改为输出
+                <code>http://127.0.0.1:&lt;port&gt;/devtools/inspector.html?ws=...</code> ——
+                JCEF 自带 DevTools 前端，实测返回 200，不依赖联网访问
+                chrome-devtools-frontend.appspot.com（离线环境也能用）；
+                <br>· idea.log 里额外提示页面 URL 是否异常，
+                若仍为 <code>about:blank</code> 会直接标注"页面未加载成功"。</li>
+            <li><b>0.1.4.34</b>：清理两处「已过时且标记为待删除」的 API（不影响功能）。
+                <br>· <code>JBCefJSQuery.create(JBCefBrowser)</code> →
+                <code>create(JBCefBrowserBase)</code>：后者接收父类型，
+                行为完全一致，且不产生 <code>[removal]</code> 警告，平台升级更稳；
+                <br>· 删除 <code>CodeCallMapIcon.isDark()</code> —— 它标了
+                <code>@SuppressWarnings("unused")</code>、从未被调用，
+                却因内部用了已过时的 <code>UIUtil.isUnderDarcula()</code> 而报警告。
+                <br>说明：这些编译警告<b>不会</b>导致运行问题。
+                若 runIde 报 <code>ClassNotFoundException</code>，
+                那是沙箱结构问题（已在 0.1.3.33 修复）；
+                若报 <code>cannot be executed on a file opened with user mapped area</code>，
+                是上一个 runIde 实例仍占用 jar，关掉它重新执行即可。</li>
+            <li><b>0.1.3.33</b>：<b>修复 runIde 沙箱安装结构错误</b>，并在 idea.log 打印 CDP 调试地址。
+                <br>· <b>沙箱问题</b>：runIde 一启动就报
+                <code>ClassNotFoundException: ...exec.CcmRunExecutor</code>。
+                原因是 <code>prepareSandbox</code> 的配置写错了 ——
+                连着写了两个 <code>from/into</code> 对，
+                但 <code>into()</code> 设置的是<b>整个任务的根目录</b>而非"当前 from 的目标"，
+                后一个会覆盖前一个。结果 <code>index.html</code> 和 agent jar
+                被直接铺到 <code>plugins/</code> 根目录，插件本体反而没被正确安装，
+                沙箱里出现两个"伪插件"。已改为在 <code>doLast</code> 中用独立的
+                <code>copy { from(...); into(...) }</code> 配对，并自动清理历史残留；
+                <br>· <b>CDP 调试地址</b>：探测到 JCEF 调试端点后，
+                直接把 Chrome DevTools 地址、目标列表 URL、WebSocket 地址
+                打印到 idea.log（<code>[CodeCallMap] ===== JCEF CDP 调试入口 =====</code>），
+                不必再翻 <code>.callmap/debug-info.json</code>；
+                <br>· 探测改为<b>延迟 + 重试</b>（首试等 2 秒，失败每 3 秒重试，
+                最多 5 次）—— 页面刚加载时 JCEF 端口往往还没监听，
+                一次探测必然失败。失败时也会记录尝试过哪些端口。</li>
+            <li><b>0.1.2.32</b>：<b>修复前端通信彻底失效</b>（提示 <code>window.cefQuery 不可用</code>、
+                <code>没有可加载的会话</code>，而 jsonl 明明存在）。
+                <br>· <b>根因</b>：之前为了绕开 <code>org.cef</code>（当时误判为"IDE 不再暴露"），
+                改成了「把桥接脚本拼进 HTML 再 <code>loadHTML</code>」。
+                这条路径会丢失页面原有的 URL 上下文，导致
+                <code>JBCefJSQuery</code> 注入的函数不可用，桥接根本没生效；
+                <br>· <b>纠正误判</b>：<code>org.cef.*</code> 一直可用 —— 当初的
+                <code>NoClassDefFoundError</code> 只是 <code>plugin.xml</code> 漏了
+                <code>com.intellij.modules.jcef</code> 依赖。现已编译器验证
+                <code>getCefBrowser()</code> / <code>CefClient.addLoadHandler</code> /
+                <code>executeJavaScript</code> 均可调用；
+                <br>· <b>新方案</b>：正常 <code>loadURL</code> 让页面在正确上下文运行 →
+                监听 <code>onLoadEnd</code> → 用 <code>executeJavaScript</code> 注入桥接，
+                并带 1.5 秒兜底与幂等保护；
+                <br>· <b>避开递归</b>：不再覆盖 JCEF 自带的 <code>window.cefQuery</code>
+                （<code>inject()</code> 生成的函数内部会调用它，覆盖会自己指自己），
+                改为提供 <code>window.codeCallMapQuery</code> 作为专属通道，前端优先使用它；
+                <br>· 桥接脚本支持重复注入检测，注入成功后打日志便于排查。</li>
+            <li><b>0.1.1.31</b>：<b>版本号体系修正为真正的四段语义</b>，并修复构建号被重置的问题。
+                <br>· 格式：<code>大版本.新增功能.修复BUG.构建号</code>。
+                此前前三段被合成一个固定值 <code>0.1.0</code>，
+                实际退化成"只有最后一位在动" ——
+                <code>0.1.0.22</code> 明明是新功能、<code>0.1.0.21</code> 是策略重构，
+                版本号却完全没体现；
+                <br>· 四段各自独立（<code>pluginMajor</code> /
+                <code>pluginFeature</code> / <code>pluginFix</code> /
+                <code>pluginBuild</code>），新增
+                <code>./gradlew bumpVersion -Pbump=fix|feat|major|build</code>
+                按语义递增，避免手改时忘记归零；
+                <br>· <b>构建号是流水号，只增不清</b>：语义段递增时归零，
+                但构建号永远累加。曾错误地把 <code>0.1.0.28</code> 的构建号
+                重置成 1，等于宣称"只构建过 1 次"，完全失真。
+                现按实际历史溯源：28 → 之后每提交一次 +1 → <b>31</b>；
+                <br>· 本次修复：<b>插件一直加载旧页面导致桥接失效</b> ——
+                内置页面提取到临时目录后只判"文件存在"，不校验内容，
+                插件升级后页面仍是上一次的旧 HTML，<code>window.cefQuery</code> 不存在，
+                于是会话列表为空、加载示例报"cefQuery 不可用"。
+                已改为按内容哈希命名（<code>index-&lt;hash&gt;.html</code>），
+                插件一变哈希就变，必定提取新页面；
+                <br>· 同时把 JCEF 调试端口默认值修正为 <b>9333</b>，
+                并优先读取 Registry 里 <code>ide.browser.jcef.debug.port</code> 的实际值。</li>
+            <li><b>1.3.2.0</b>（原 0.1.0.28）：修复前端一直加载旧页面（导致桥接完全不工作）。
+                <br>现象：明明有 jsonl，却提示"没有录制数据"；
+                点「加载示例」报
+                <code>window.cefQuery 不可用</code>。
+                <br>根因：插件把内置页面提取到
+                <code>临时目录/codecallmap-web/index.html</code>，
+                但只要这个文件存在就直接复用，<b>不校验内容</b>。
+                于是插件升级后（前端桥接脚本已更新），页面上跑的还是上一次提取的旧 HTML
+                —— 实测临时文件时间 08:17，而新构建是 11:16，相差 3 小时。
+                旧页面里没有新版桥接，<code>window.cefQuery</code> 自然不存在，
+                于是所有请求（会话列表、加载示例、加载真实数据）全部失败。
+                <br>修复：提取后的文件名改为 <code>index-&lt;内容哈希&gt;.html</code>，
+                插件版本一变哈希就变，必定提取新文件；同名文件存在则说明内容一致，
+                直接复用。同时清理旧版本文件，避免临时目录堆积几十 MB。
+                <br>· JCEF 调试端口默认值修正为 <b>9333</b>（此前误写 93333）。
+                并改为优先读取 Registry 里
+                <code>ide.browser.jcef.debug.port</code> 的实际值，
+                探测失败再依次尝试 9333 / 93333 / 9222，不再只信配置。
+                <br>· 桥接脚本的错误前缀抽成常量，不再用硬编码
+                <code>substring(11)</code> 截断。</li>
+            <li><b>0.1.0.27</b>：<b>修复调用链立不起来 + 新增方法入参采集</b>。
+                <br>现象：Debug with CCM 之后，前端看不到"某个接口"的调用链，
+                耗时也对不上 —— 实测根节点是 <code>LpgRunner.main</code>（应用启动，
+                25952ms），而它的子节点合计只有 513ms，中间 25 秒凭空消失。
+                <br>原因有两个：
+                <br>· <b>HTTP 入口完全没被插桩</b>。探针放行判断只检查了
+                「直接实现的接口」，而 <code>DispatcherServlet</code> 靠<b>类名</b>匹配、
+                用户继承 <code>HttpServlet</code> 的 Servlet 靠<b>父类</b>匹配，
+                两个维度都被漏掉，于是每个请求都不进插桩流程 ——
+                一次请求在 trace 里根本没有根节点；
+                <br>· <b>方法入参从未采集</b>。插桩入口只接收类名/方法名/描述符，
+                从不读取实参，<code>args</code> 字段一直是空的。
+                <br>本次修复与增强：
+                <br>· 探针规则升级为「类型 + <b>方法名正则</b> + isEndpoint + 消息模板」
+                结构（参考同类工具的 includedClassFilters 做法）；
+                <br>· 新增 Servlet / Filter / DispatcherServlet 入口探针，
+                标记 <code>isEndpoint</code> 后在栈空时建立 trace 根，
+                并反射取出 <code>GET /api/order</code> 写入 span.path，
+                <b>一次接口调用 = 一条完整调用链</b>；
+                <br>· 新增入参采集：实参序列化为 JSON 写入 <code>span.args</code>，
+                带循环引用检测、深度/长度限制、敏感字段脱敏，
+                且<b>只在确定写盘时才序列化</b>（被丢弃的快调用不付反射开销）；
+                <br>· 前端 Span 列表新增「入参」列，trace 下拉优先显示接口路径。
+                <br>· 顺带补齐脱敏词表：原词表只有凭据类关键字，
+                漏了手机号 / 身份证 / 银行卡等个人信息，现已覆盖。</li>
+            <li><b>0.1.0.26</b>：新增<b>调用统计</b>页与<b>慢调用阈值</b>。
+                <br>背景：之前只能看单条 trace 内的调用，反复调用同一接口时
+                无法回答"调了多少次、平均多慢、最慢多少"。
+                <br>· <b>按接口统计</b>：每条 trace 视为一次调用，给出
+                次数 / 平均 / P95 / 最大 / 慢调用次数 / 慢占比 / 异常数；
+                <br>· <b>按方法统计</b>：区分「执行次数」与「涉及调用数」
+                —— 同一段代码被多个请求复用时，这两个数字不一样，
+                正好对应"反复调用很多接口但都走到同样代码"的场景；
+                <br>· <b>慢调用阈值</b>可在设置里配置（默认 1000ms）。
+                注意它<b>不是</b>采集过滤：数据照常全录，只是超阈值的被标红
+                并计入慢调用统计。若把采集阈值 minDurationMs 调到 60000，
+                60 秒以下的调用会直接不记录，就没法做统计了；
+                <br>· 统计范围可选「当前会话」或「全部会话」。</li>
+            <li><b>0.1.0.25</b>：新增 Chrome DevTools 调试地址导出与前端 <code>[CCM]</code> 日志。</li>
+            <li><b>0.1.0.24</b>：修复桥接丢失 inject 产物导致 JSON 解析失败；
+                新增项目级配置 <code>.callmap/callmap-config.yml</code>。</li>
+            <li><b>0.1.0.23</b>：修复前端桥接函数名不匹配、IDE 侧数据目录解析错误。</li>
+            <li><b>0.0.1.22</b>：新增第三方调用可见性（SQL / HTTP 探针 + SQL 脱敏）。</li>
+            <li><b>0.0.1.21</b>：插桩策略改为白名单，默认从启动类自动推导业务包。</li>
+            <li><b>0.0.1.20</b>：接口一律不插桩，修复
+                <code>duplicate interface definition</code>。</li>
+            <li><b>0.0.1.19</b>：插桩过滤规则改为外部 YAML 配置。</li>
+            <li><b>0.0.1.18</b>：修复 Debug with CCM 不注入 agent。</li>
+            <li><b>0.0.1.17</b>：修复点过 Debug with CCM 后原生 Debug 也被插桩。</li>
+            <li><b>0.0.1.16</b>：版本号改为四段式，末段为构建号。</li>
+            <li><b>0.0.1.15</b>：界面全部迁移到 Vue，新增会话下拉与会话对比。</li>
+            <li><b>0.0.1.14</b>：补上 <code>com.intellij.modules.jcef</code> 依赖并恢复 Vue 前端。</li>
+            <li><b>0.0.1.13</b>：新增录制会话管理（按次运行隔离查看）。</li>
+            <li><b>0.0.1.12</b>：Services 面板新增 Run with CCM / Debug with CCM 按钮。</li>
+            <li><b>0.0.1.11</b>：架构改为「自定义 Executor + 原生 Application 配置」。</li>
+            <li><b>0.0.1.7</b>：修复 agent class 未打进插件 jar。</li>
+            <li><b>0.0.1.5</b>：agent jar 降到 Java 8，兼容 JDK 8/11/17/21。</li>
+        </ul>
+    ]]></change-notes>
+
+    <!-- sinceBuild 由分支构建配置注入：master/support-253=253，support-233=233 -->
+    <idea-version since-build="233"/>
+
+    <depends>com.intellij.modules.platform</depends>
+    <!-- Run Configuration 继承 ApplicationConfiguration，运行时需 Java 插件 -->
+    <depends>com.intellij.java</depends>
+    <!-- JCEF：工具窗口用 JBCefBrowser 承载 Vue 前端页面。
+         这是必须声明的模块依赖 —— 缺少它时，插件类加载器看不到
+         com.intellij.ui.jcef.* 包，运行时会抛
+         NoClassDefFoundError: com/intellij/ui/jcef/JBCefJSQuery$Response。
+         （此前 b6 误判为"IDEA 2026.2 移除了 JCEF"，实际只是漏了这个声明；
+         2026.2 仍以 plugins/jcef-plugin 形式提供，模块 id 即 com.intellij.modules.jcef。）
+         设为必需依赖：MainWindowFactory 直接构造 WebViewPanel，
+         缺了它面板必然崩溃，不如在加载期就明确报出依赖缺失。 -->
+    <depends>com.intellij.modules.jcef</depends>
+
+    <!-- Spring Boot 插件：可选依赖，只用于「Services 面板显示端口号」。
+         【为什么必须声明】
+         插件之间的类加载器默认互相隔离 —— 不声明依赖，CCM 的
+         Class.forName("...SpringBootJmxSetup$LocalSetup") 必然抛
+         ClassNotFoundException，即使 IDE 里装了 Spring Boot 插件。
+         实测日志：「CCM: Spring Boot 插件不可用，跳过 JMX」，而 IDE 里
+         SpringBootApplicationRunConfiguration 明明能用 ——
+         这不是"没装插件"，是"看不见插件的类"。
+         这和上面 JCEF 漏声明导致 NoClassDefFoundError 是同一类问题。
+         【为什么是 optional】
+         没装 Spring Boot 的社区版 / 纯 Java 项目也要能用 CCM，
+         只是不显示端口号，因此不能设为必需依赖。 -->
+    <depends optional="true" config-file="codecallmap-springboot.xml">com.intellij.spring.boot</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- WebView 面板：加载前端页面展示调用时序图/瀑布图（JCEF） -->
+        <!-- CodeCallMap 工具窗口：纯 Swing 面板（调用树 + 耗时热点），不使用 JCEF。
+             注意 canCloseContents 必须为 false：设为 true 时用户可以点标签页上的 ×
+             把 Content 关掉，而 ToolWindowFactory 只在首次显示时被调用一次，
+             关掉后再打开工具窗口不会再创建内容 —— 表现就是「只有 Nothing to show」。
+             保持 false 后，用户只能隐藏整个工具窗口，再次打开内容仍在。 -->
+        <toolWindow id="CodeCallMap" anchor="bottom" secondary="true" doNotActivateOnStart="true"
+                    canCloseContents="false"
+                    factoryClass="com.github.chargeduck.codecallmap.webview.MainWindowFactory"/>
+
+        <!-- Run/Debug 配置下拉中的 "CodeCallMap" 类型：启动时自动注入 javaagent -->
+        <configurationType implementation="com.github.chargeduck.codecallmap.run.CodeCallMapRunConfigurationType"/>
+
+        <!-- ===== CCM 采集模式执行器（Run with CCM / Debug with CCM） =====
+             参考市面同类插件的架构：不自定义 Run Configuration 类型，
+             而是给 IDEA 原生 Application 配置增加两个执行器。
+             因为用的是原生配置，编辑器装订区菜单、Services 面板、顶部下拉
+             全部原生支持，无需任何额外适配。
+
+             顺序：排在原生 run / debug 之后，避免打乱用户熟悉的按钮顺序。 -->
+        <executor implementation="com.github.chargeduck.codecallmap.exec.CcmRunExecutor"
+                  id="CCM.Run" order="last"/>
+        <executor implementation="com.github.chargeduck.codecallmap.exec.CcmDebugExecutor"
+                  id="CCM.Debug" order="last"/>
+
+        <!-- CCM 执行器的宿主 Runner：认领「CCM 执行器 + Java 应用配置」，
+             注入 -javaagent 后委托给原生 Run / Debug runner 执行。 -->
+        <programRunner implementation="com.github.chargeduck.codecallmap.exec.CcmRunProgramRunner"/>
+        <programRunner implementation="com.github.chargeduck.codecallmap.exec.CcmDebugProgramRunner"/>
+
+        <!-- 应用级设置持久化（codeCallMapSettings.xml） -->
+        <applicationService serviceImplementation="com.github.chargeduck.codecallmap.run.CodeCallMapSettingsState"/>
+
+        <!-- 自动接管：项目级 service 订阅 RunManagerListener.TOPIC，autoAttachEnabled 开启时普通 Application 配置自动追加 -javaagent -->
+        <projectService serviceImplementation="com.github.chargeduck.codecallmap.run.CodeCallMapAutoAttachListener"/>
+
+        <!-- 项目打开时清理历史版本写进运行配置的 agent 参数。
+             旧实现在 Runner 里用 setVMParameters() 注入 -javaagent，那是持久化的，
+             会导致"点过 CCM 之后原生 Run/Debug 也被插桩"，并与 debugger-agent
+             叠加触发 LinkageError。新实现已不再改配置，这里负责给存量配置兜底。 -->
+        <postStartupActivity implementation="com.github.chargeduck.codecallmap.run.CodeCallMapConfigCleaner"/>
+
+        <!-- 运行时注入兜底：2026.2 已移除 ApplicationConfiguration.getJavaParameters 重写，
+             统一经 com.intellij.java.programPatcher 在启动前追加 -javaagent -->
+        <java.programPatcher implementation="com.github.chargeduck.codecallmap.run.CodeCallMapProgramPatcher"/>
+    </extensions>
+
+    <actions>
+        <action id="com.github.chargeduck.codecallmap.ShowCallMapAction"
+                class="com.github.chargeduck.codecallmap.ShowCallMapAction"
+                text="Show Call Map"
+                description="打开调用链路地图（占位 Action，后续接入时序图/瀑布图）">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <!-- ===== Services（运行仪表盘）里的 CCM 启动入口 =====
+             为什么执行器注册了还要再写 Action：
+             自定义 Executor 会自动出现在「编辑器装订区菜单」和「顶部 Run 配置下拉」，
+             但 Services 面板列出的是"运行中的服务节点"，其工具栏/右键菜单
+             需要各自注册 Action 才会出现。继承平台的 ExecutorAction
+             即可复用「取选中节点 → 找配置 → 用指定执行器启动」的全套逻辑。
+
+             直接挂到 RunDashboardContentToolbar，与原生 Run/Debug 按钮平铺并列，
+             不再套一层子菜单（少点一次，也更容易发现）。 -->
+        <action id="com.github.chargeduck.codecallmap.RunWithCcmDashboard"
+                class="com.github.chargeduck.codecallmap.exec.CcmRunDashboardAction"
+                text="Run with CCM"
+                icon="AllIcons.Actions.Execute">
+            <add-to-group group-id="RunDashboardContentToolbar" anchor="last"/>
+        </action>
+
+        <action id="com.github.chargeduck.codecallmap.DebugWithCcmDashboard"
+                class="com.github.chargeduck.codecallmap.exec.CcmDebugDashboardAction"
+                text="Debug with CCM"
+                icon="AllIcons.Actions.StartDebugger">
+            <add-to-group group-id="RunDashboardContentToolbar" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

@@ -4,7 +4,6 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.editor.markup.GutterIconRenderer;
-import com.intellij.openapi.ui.Messages;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -29,13 +28,27 @@ public final class CcmGutterIcon extends GutterIconRenderer {
     /** 一次调用的完整快照。 */
     private final CcmCallRecord record;
 
+    /** 弹窗标题里展示的「类#方法」；为 null 时退回 spanId。 */
+    private final String title;
+
     /**
      * 构造。
      *
      * @param record 调用记录
      */
     public CcmGutterIcon(CcmCallRecord record) {
+        this(record, null);
+    }
+
+    /**
+     * 构造。
+     *
+     * @param record 调用记录
+     * @param title  「类#方法」，仅用于弹窗标题
+     */
+    public CcmGutterIcon(CcmCallRecord record, String title) {
         this.record = record;
+        this.title = title;
     }
 
     @Override
@@ -66,23 +79,16 @@ public final class CcmGutterIcon extends GutterIconRenderer {
         return new AnAction() {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
-                StringBuilder sb = new StringBuilder();
-                sb.append("耗时：").append(record.durationMs()).append("ms\n");
-                if (record.thread() != null) {
-                    sb.append("线程：").append(record.thread()).append("\n");
-                }
-                sb.append("\n── 入参 ──\n").append(record.fullArgsText());
-                sb.append("\n── 返回值 ──\n").append(record.fullRetText());
-                if (record.exception() != null) {
-                    sb.append("\n── 异常 ──\n").append(record.exception());
-                }
-                Messages.showMultilineInputDialog(
+                // 用只读弹窗而不是 Messages.showMultilineInputDialog：
+                // 后者是"输入框"，内容可编辑、有光标，看起来像能改录制数据。
+                // 这里只有一条记录，没有翻页上下文，所以 onIndexChange 传 null。
+                CcmRecordDialog dialog = new CcmRecordDialog(
                         e.getProject(),
-                        sb.toString(),
-                        "录制现场 · " + record.spanId(),
-                        sb.toString(),
-                        AllIcons.Nodes.DataTables,
+                        title != null ? title : record.spanId(),
+                        java.util.Collections.singletonList(record),
+                        0,
                         null);
+                dialog.show();
             }
         };
     }

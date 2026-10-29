@@ -1,9 +1,19 @@
 <template>
   <div class="panel-wrap">
-    <!-- 双向滚动容器：左侧标签区宽度按最长方法名动态计算，
-         超出视口时出现横向滚动条，避免方法名和耗时挤在一起 -->
-    <div ref="scrollEl" class="wf-scroll">
-      <canvas ref="canvasEl" @click="onCanvasClick" @mousemove="onMouseMove" @mouseleave="onMouseLeave"></canvas>
+    <!-- 与「时序图」同一套思路：滚动高度由 .wf-inner 撑开，
+         画布只有视口大小并 sticky 在左上角。
+         一次请求动辄上千个 span，如果画布按内容高度建（30px × 2000 = 6 万像素），
+         既会撞上浏览器画布尺寸上限，也会让切换 tab 时重建图层卡住。 -->
+    <div ref="scrollEl" class="wf-scroll" @scroll="onScroll">
+      <div class="wf-inner" :style="{ width: contentW + 'px', height: contentH + 'px' }">
+        <canvas
+          ref="canvasEl"
+          class="wf-canvas"
+          @click="onCanvasClick"
+          @mousemove="onMouseMove"
+          @mouseleave="onMouseLeave"
+        ></canvas>
+      </div>
     </div>
 
     <div
@@ -36,6 +46,8 @@ const emit = defineEmits(['jump'])
 const canvasEl = ref(null)
 const scrollEl = ref(null)
 const isEmpty = ref(true)
+const contentW = ref(0)
+const contentH = ref(0)
 const tip = reactive({ visible: false, x: 0, y: 0, label: '', duration: '', self: '', exc: '' })
 
 /**
@@ -54,133 +66,156 @@ const tip = reactive({ visible: false, x: 0, y: 0, label: '', duration: '', self
  */
 const ROW_H = 30
 const PAD_TOP = 46
+const HEAD_H = 40           // 固定表头高度（滚动时不动）
 const LABEL_FONT = '11px ui-monospace, Consolas, Monaco, monospace'
 const DUR_FONT = '11px Consolas, Monaco, monospace'
 const MIN_NAME_W = 150
 const MAX_NAME_W = 420
 const TIME_COL_W = 92       // 自身 / 总耗时两列各占宽度
 const GAP = 10
+const C_BG = '#1e1f22'
 
-let layout = { padL: 0, nameW: 0, plotW: 0, scale: 1, minT: 0, maxT: 1, rows: [], w: 0, h: 0 }
+/**
+ * 当前布局。只与数据有关，与视口无关，所以按 nodes 引用缓存 ——
+ * 拖动滚动条、切换 tab 都不会重算。
+ */
+let layout = null
+let layoutNodes = null
 
 /** 计算布局：先量方法名宽度，再定各列位置。 */
-function computeLayout(ctx) {
-  const nodes = (props.nodes || []).slice().sort((a, b) => a.start - b.start)
+function computeLayout(nodes) {
   if (!nodes.length) return null
+  const sorted = nodes.slice().sort((a, b) => a.start - b.start)
 
-  let minT = Infinity, maxT = -Infinity
-  nodes.forEach((n) => { minT = Math.min(minT, n.start); maxT = Math.max(maxT, n.end) })
+  let minT = Infinity
+  let maxT = -Infinity
+  sorted.forEach((n) => { minT = Math.min(minT, n.start); maxT = Math.max(maxT, n.end) })
   if (minT === Infinity) return null
   if (maxT === minT) maxT = minT + 1
 
   // 方法名列宽：取实测最宽者，限制在 [MIN, MAX] 之间
-  ctx.font = LABEL_FONT
+  const probe = document.createElement('canvas').getContext('2d')
+  probe.font = LABEL_FONT
   let nameW = MIN_NAME_W
-  nodes.forEach((n) => {
+  sorted.forEach((n) => {
     const indent = 6 + (n.depth || 0) * 10
-    const w = ctx.measureText(n.label || '').width + indent + 16
+    const w = probe.measureText(n.label || '').width + indent + 16
     nameW = Math.max(nameW, Math.min(MAX_NAME_W, w))
   })
 
   const padL = nameW + TIME_COL_W * 2 + GAP * 3
-  layout = { nameW, padL, minT, maxT, rows: nodes }
+  const h = PAD_TOP + sorted.length * ROW_H + 24
+  return { nameW, padL, minT, maxT, rows: sorted, h, w: padL + 260 }
+}
+
+function ensureLayout(nodes) {
+  if (layoutNodes === nodes && layout) return layout
+  layoutNodes = nodes
+  layout = computeLayout(nodes || [])
   return layout
 }
 
-/** 计算画布尺寸（含滚动），返回绘图上下文。 */
-function prepareCanvas() {
-  const canvas = canvasEl.value
-  const scroll = scrollEl.value
-  if (!canvas || !scroll) return null
-  const L = layout
-  const dpr = window.devicePixelRatio || 1
+let rafId = 0
+let timerId = 0
 
-  // 先归零再量视口，否则 clientWidth 会被上一次的宽画布撑住，永远缩不回来
-  canvas.style.width = '0px'
-  canvas.style.height = '0px'
-  const viewportW = scroll.clientWidth || scroll.parentElement?.clientWidth || 600
-  const viewportH = scroll.clientHeight || scroll.parentElement?.clientHeight || 320
+function cancelPendingDraw() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
+  if (timerId) { clearTimeout(timerId); timerId = 0 }
+}
 
-  // 时间轴至少给 260px，否则条形会被压得没有意义
-  const requiredW = L.padL + 260
-  const contentH = PAD_TOP + L.rows.length * ROW_H + 24
-  const cssW = Math.max(requiredW, viewportW)
-  const cssH = Math.max(contentH, viewportH)
-
-  canvas.width = Math.floor(cssW * dpr)
-  canvas.height = Math.floor(cssH * dpr)
-  canvas.style.width = cssW + 'px'
-  canvas.style.height = cssH + 'px'
-  const ctx = canvas.getContext('2d')
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  return { ctx, w: cssW, h: cssH }
+/**
+ * 合并重绘请求。
+ *
+ * <p>rAF 负责滚动时的顺滑刷新；setTimeout 兜底是因为浏览器对
+ * 不可见窗口会停止派发动画帧，只靠 rAF 会让画布一直不画。
+ */
+function scheduleDraw() {
+  if (!props.active) return
+  if (rafId || timerId) return
+  rafId = requestAnimationFrame(() => {
+    rafId = 0
+    if (timerId) { clearTimeout(timerId); timerId = 0 }
+    draw()
+  })
+  timerId = setTimeout(() => {
+    timerId = 0
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
+    draw()
+  }, 150)
 }
 
 function draw() {
-  if (!props.active) return
-  isEmpty.value = (props.nodes || []).length === 0
   const canvas = canvasEl.value
+  const scroll = scrollEl.value
+  if (!canvas || !scroll) return
+  const nodes = props.nodes || []
+  isEmpty.value = nodes.length === 0
+  const viewW = scroll.clientWidth
+  const viewH = scroll.clientHeight
+  // 面板隐藏时量不到尺寸，等可见后由 ResizeObserver 再画
+  if (!viewW || !viewH) return
+
+  const dpr = window.devicePixelRatio || 1
+  const pxW = Math.floor(viewW * dpr)
+  const pxH = Math.floor(viewH * dpr)
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW
+    canvas.height = pxH
+    canvas.style.width = viewW + 'px'
+    canvas.style.height = viewH + 'px'
+  }
+  const ctx = canvas.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, viewW, viewH)
   if (isEmpty.value) {
-    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+    // 空数据时把滚动内容归零，否则会残留上一条 trace 的滚动条
+    if (contentW.value) contentW.value = 0
+    if (contentH.value) contentH.value = 0
     return
   }
-  const probe = document.createElement('canvas').getContext('2d')
-  if (!computeLayout(probe)) return
-  const p = prepareCanvas()
-  if (!p) return
-  const { ctx, w: W, h: H } = p
-  const L = layout
-  const { minT, maxT, padL, nameW } = L
-  const plotW = Math.max(60, W - padL - 40)
-  const scale = plotW / (maxT - minT)
-  layout.plotW = plotW
-  layout.scale = scale
-  const x = (t) => padL + (t - minT) * scale
 
-  ctx.clearRect(0, 0, W, H)
+  const L = ensureLayout(nodes)
+  if (!L) return
 
-  // ---------- 表头 ----------
-  ctx.font = DUR_FONT
-  ctx.textBaseline = 'middle'
-  ctx.fillStyle = '#8a8a8a'
-  ctx.textAlign = 'left'
-  ctx.fillText('方法', 6, PAD_TOP - 16)
-  // 两列耗时用右对齐，数字位数不同也能对齐小数点
-  ctx.textAlign = 'right'
-  ctx.fillText('自身', nameW + TIME_COL_W, PAD_TOP - 16)
-  ctx.fillText('总耗时', nameW + TIME_COL_W * 2 + GAP, PAD_TOP - 16)
-  ctx.textAlign = 'left'
+  // 画布按视口，但时间轴要铺满内容宽度
+  const W = Math.max(L.padL + 260, viewW)
+  if (contentW.value !== W) contentW.value = W
+  if (contentH.value !== L.h) contentH.value = L.h
 
-  // ---------- 时间轴刻度 ----------
-  const step = niceStep((maxT - minT) / 6)
-  for (let t = Math.ceil(minT / step) * step; t <= maxT; t += step) {
+  const sx = scroll.scrollLeft
+  const sy = scroll.scrollTop
+  const plotW = Math.max(60, W - L.padL - 40)
+  const scale = plotW / (L.maxT - L.minT)
+  const x = (t) => L.padL + (t - L.minT) * scale
+
+  // ---- 内容层：按滚动量平移，只画可视行 ----
+  ctx.save()
+  ctx.translate(-sx, -sy)
+
+  // 时间轴刻度线通高，滚动时也能对齐
+  const step = niceStep((L.maxT - L.minT) / 6)
+  for (let t = Math.ceil(L.minT / step) * step; t <= L.maxT; t += step) {
     const tx = x(t)
     ctx.strokeStyle = '#3c3f41'
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(tx, PAD_TOP - 6)
-    ctx.lineTo(tx, H - 10)
+    ctx.lineTo(tx, L.h - 10)
     ctx.stroke()
-    ctx.fillStyle = '#6a6a6a'
-    ctx.font = '10px sans-serif'
-    ctx.fillText(formatDurationAxis(t - minT), tx + 2, PAD_TOP - 16)
   }
-
-  // 分隔线：把标签区和时间轴区分开，视觉上更清楚
+  // 标签区与时间轴区的分隔线
   ctx.strokeStyle = '#3c3f41'
   ctx.beginPath()
-  ctx.moveTo(padL - GAP / 2, PAD_TOP - 26)
-  ctx.lineTo(padL - GAP / 2, H - 10)
+  ctx.moveTo(L.padL - GAP / 2, PAD_TOP - 26)
+  ctx.lineTo(L.padL - GAP / 2, L.h - 10)
   ctx.stroke()
 
-  // ---------- 每一行 ----------
-  L.rows.forEach((n, i) => {
+  // 行（仅可视窗口）
+  const i0 = Math.max(0, Math.floor((sy - PAD_TOP) / ROW_H))
+  const i1 = Math.min(L.rows.length - 1, Math.ceil((sy + viewH - PAD_TOP) / ROW_H))
+  for (let i = i0; i <= i1; i++) {
+    const n = L.rows[i]
     const y = PAD_TOP + i * ROW_H
-    if (y > H - 4) return
-    const x0 = x(n.start), x1 = x(n.end)
-    const selfMs = n.selfMs != null ? n.selfMs : (n.durationMs || 0)
-    const color = n.exception ? '#e06c6c'
-      : (selfMs > 300 ? '#e06c6c' : (selfMs > 100 ? '#e0a050' : '#4caf50'))
 
     // 行底色（斑马纹，长列表更好跟行）
     if (i % 2 === 1) {
@@ -188,17 +223,24 @@ function draw() {
       ctx.fillRect(0, y, W, ROW_H)
     }
 
+    const x0 = x(n.start)
+    const x1 = x(n.end)
+    const selfMs = n.selfMs != null ? n.selfMs : (n.durationMs || 0)
+    const color = n.exception ? '#e06c6c'
+      : (selfMs > 300 ? '#e06c6c' : (selfMs > 100 ? '#e0a050' : '#4caf50'))
+
     // 条形
     ctx.fillStyle = 'rgba(255,255,255,0.06)'
     ctx.fillRect(x0, y + 6, Math.max(2, x1 - x0), ROW_H - 12)
     ctx.fillStyle = color
     ctx.fillRect(x0, y + 6, Math.max(2, x1 - x0), 3)
 
-    // 方法名：按层级缩进，超宽省略（列宽已经量过，正常不会截断）
+    // 方法名：按层级缩进，超宽省略
     const indent = 6 + (n.depth || 0) * 10
     ctx.font = LABEL_FONT
     ctx.fillStyle = '#c8c8c8'
-    const maxNameW = nameW - indent - 4
+    const maxNameW = L.nameW - indent - 4
+    ctx.textAlign = 'left'
     ctx.fillText(clip(ctx, n.label || '', maxNameW), indent, y + ROW_H / 2)
 
     // 自身耗时列（右对齐，暗色）
@@ -206,23 +248,61 @@ function draw() {
     ctx.textAlign = 'right'
     if (n.selfMs != null && n.childCount > 0 && n.selfMs > 0) {
       ctx.fillStyle = '#8a8a8a'
-      ctx.fillText(formatDuration(n.selfMs), nameW + TIME_COL_W, y + ROW_H / 2)
+      ctx.fillText(formatDuration(n.selfMs), L.nameW + TIME_COL_W, y + ROW_H / 2)
     } else {
       ctx.fillStyle = '#4a4a4a'
-      ctx.fillText('-', nameW + TIME_COL_W, y + ROW_H / 2)
+      ctx.fillText('-', L.nameW + TIME_COL_W, y + ROW_H / 2)
     }
     // 总耗时列
     ctx.fillStyle = color
-    ctx.fillText(formatDuration(n.durationMs), nameW + TIME_COL_W * 2 + GAP, y + ROW_H / 2)
+    ctx.fillText(formatDuration(n.durationMs), L.nameW + TIME_COL_W * 2 + GAP, y + ROW_H / 2)
     ctx.textAlign = 'left'
 
     // 异常：贴在条形右侧
     if (n.exception) {
       ctx.fillStyle = '#e06c6c'
       ctx.font = '10px sans-serif'
-      ctx.fillText('⚠ ' + clip(ctx, n.exception, 40), Math.max(x1 + 6, padL), y + ROW_H / 2)
+      ctx.fillText('⚠ ' + clip(ctx, n.exception, 40), Math.max(x1 + 6, L.padL), y + ROW_H / 2)
     }
-  })
+  }
+
+  ctx.restore()
+
+  // ---- 固定表头：列名 + 时间刻度，滚动时始终可见 ----
+  drawHeader(ctx, L, viewW, sx, x)
+}
+
+/** 顶部固定表头（列名与时间刻度）。 */
+function drawHeader(ctx, L, viewW, sx, x) {
+  ctx.fillStyle = C_BG
+  ctx.fillRect(0, 0, viewW, HEAD_H)
+  ctx.strokeStyle = '#3c3f41'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(0, HEAD_H - 0.5)
+  ctx.lineTo(viewW, HEAD_H - 0.5)
+  ctx.stroke()
+
+  ctx.font = DUR_FONT
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#8a8a8a'
+  // 三个列名跟着横向滚动一起平移，保证和下面各行的方法名对齐
+  ctx.textAlign = 'left'
+  ctx.fillText('方法', 6 - sx, HEAD_H - 14)
+  ctx.textAlign = 'right'
+  ctx.fillText('自身', L.nameW + TIME_COL_W - sx, HEAD_H - 14)
+  ctx.fillText('总耗时', L.nameW + TIME_COL_W * 2 + GAP - sx, HEAD_H - 14)
+  ctx.textAlign = 'left'
+
+  // 时间刻度：位置随横向滚动平移，数值按内容坐标算好
+  const step = niceStep((L.maxT - L.minT) / 6)
+  ctx.font = '10px sans-serif'
+  ctx.fillStyle = '#6a6a6a'
+  for (let t = Math.ceil(L.minT / step) * step; t <= L.maxT; t += step) {
+    const tx = x(t) - sx
+    if (tx < 0 || tx > viewW) continue
+    ctx.fillText(formatDurationAxis(t - L.minT), tx + 2, HEAD_H - 14)
+  }
 }
 
 /** 按宽度截断文字，超出加省略号。 */
@@ -236,11 +316,15 @@ function clip(ctx, text, maxW) {
   return s + '…'
 }
 
+/** 命中测试：把鼠标位置换算成内容坐标里的行。 */
 function hitTest(ev) {
-  if (!layout.rows || !layout.rows.length) return -1
+  if (!layout || !layout.rows || !layout.rows.length) return -1
   const rect = canvasEl.value.getBoundingClientRect()
-  const y = ev.clientY - rect.top
-  const i = Math.floor((y - PAD_TOP) / ROW_H)
+  const yView = ev.clientY - rect.top
+  // 固定表头不参与命中
+  if (yView < HEAD_H) return -1
+  const yContent = yView + (scrollEl.value ? scrollEl.value.scrollTop : 0)
+  const i = Math.floor((yContent - PAD_TOP) / ROW_H)
   if (i < 0 || i >= layout.rows.length) return -1
   return i
 }
@@ -270,29 +354,45 @@ function onMouseMove(ev) {
 
 function onMouseLeave() { tip.visible = false }
 
-function onResize() { if (props.active) draw() }
+/** 滚动时隐藏 tooltip 并重画可视窗口。 */
+function onScroll() {
+  tip.visible = false
+  scheduleDraw()
+}
 
-watch(() => [props.nodes, props.active], () => { nextTick(draw) }, { deep: true })
+let ro = null
+
+// 只监听数组引用变化，不做 deep 遍历 —— 几千个节点上 deep watch 本身就很贵
+watch(() => props.nodes, () => { scheduleDraw() })
+watch(() => props.active, (v) => { if (v) nextTick(scheduleDraw) })
 
 onMounted(() => {
-  window.addEventListener('resize', onResize)
-  nextTick(draw)
+  if (typeof ResizeObserver !== 'undefined' && scrollEl.value) {
+    ro = new ResizeObserver(() => scheduleDraw())
+    ro.observe(scrollEl.value)
+  }
+  nextTick(scheduleDraw)
 })
+
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', onResize)
+  if (ro) { ro.disconnect(); ro = null }
+  cancelPendingDraw()
 })
 </script>
 
 <style scoped>
-.panel-wrap { position: relative; height: 100%; }
+.panel-wrap { position: relative; height: 100%; overflow: hidden; }
 
-/* overflow:auto —— 内容超宽时出横向滚动条，超高时出纵向滚动条 */
+/* overflow:auto —— 内容超宽出横向滚动条，超高出纵向滚动条 */
 .wf-scroll {
   width: 100%;
   height: 100%;
   overflow: auto;
+  position: relative;
 }
-canvas { display: block; }
+.wf-inner { position: relative; min-width: 100%; min-height: 100%; }
+/* 画布钉在滚动视口左上角，永远只有一屏大小 */
+.wf-canvas { position: sticky; top: 0; left: 0; display: block; }
 
 .empty {
   position: absolute; top: 40%; width: 100%; text-align: center;

@@ -35,12 +35,15 @@ import java.util.List;
  * （每次重算都要读文件）。所以命令式更贴切，实现也轻得多。
  *
  * <h2>渲染形态</h2>
- * 三种 inlay 组合成本类的输出（对应产品需求 A+B）：
+ * 本类只负责<b>一条行尾摘要</b>（{@code ▶ 412ms · id=10086, qty=1 · 点击看详情}），
+ * 外加一个 gutter 图标（由 {@link CcmGutterIcon} 提供，点开看完整入参/返回）：
  * <ol>
- *   <li><b>参数后</b>（inline）：{@code id = 42} —— 值跟在形参后面，最接近 debug 的观感；</li>
- *   <li><b>行尾</b>（after-line-end）：{@code ▶ 12ms · 3 参数 · 有返回} —— 不占代码宽度；</li>
- *   <li><b>gutter 图标</b>：由 {@link CcmGutterIcon} 提供，点开看完整入参/返回。</li>
+ *   <li><b>行尾</b>（after-line-end）：不占代码宽度，参数值也收在这一处；</li>
+ *   <li><b>可点击</b>：点开只读详情弹窗（{@link CcmRecordDialog}）。</li>
  * </ol>
+ *
+ * <p>早期版本还把每个实参插在形参后面（{@code id = 42}），
+ * 参数一多整行代码就被推出屏幕 —— 这是"提示遮住代码"的来源，现已移除。
  *
  * @author chargeduck
  */
@@ -78,10 +81,6 @@ public final class CcmInlayRenderer
     /** 点击回调（可为 null，表示该 inlay 不可点击）。 */
     private final Runnable onClick;
 
-    private CcmInlayRenderer(String text, String tooltip, CcmGutterIcon gutter) {
-        this(text, tooltip, gutter, null);
-    }
-
     private CcmInlayRenderer(String text, String tooltip, CcmGutterIcon gutter, Runnable onClick) {
         this.text = text == null ? "" : text;
         this.tooltip = tooltip;
@@ -90,45 +89,25 @@ public final class CcmInlayRenderer
     }
 
     /**
-     * 创建参数值提示（A 形态）。
+     * 创建<b>可点击</b>的行尾摘要提示。
      *
-     * @param name  参数名
-     * @param value 值短文本
-     * @return 渲染器
-     */
-    public static CcmInlayRenderer forArg(String name, String value) {
-        return new CcmInlayRenderer(name + " = " + value, null, null);
-    }
-
-    /**
-     * 创建行尾汇总提示（B 形态），并挂上 gutter 图标。
-     *
-     * @param summary 摘要文本
-     * @param tooltip 悬停信息（完整入参与返回）
-     * @param gutter  gutter 图标；null 表示不挂图标
-     * @return 渲染器
-     */
-    public static CcmInlayRenderer forSummary(String summary, String tooltip, CcmGutterIcon gutter) {
-        return new CcmInlayRenderer(summary, tooltip, gutter);
-    }
-
-    /**
-     * 创建<b>可点击</b>的行尾汇总提示，用于「同一方法多次调用时切换到下一条」。
-     *
-     * <h2>为什么用鼠标监听而不是 AnAction</h2>
+     * <h2>为什么点击要自己实现</h2>
      * {@code EditorCustomElementRenderer} 没有"点击动作"的接口 ——
      * 那是 {@link com.intellij.openapi.editor.markup.GutterIconRenderer} 才有的。
      * inlay 想响应点击只能自己往编辑器的 contentComponent 挂 {@code MouseListener}，
-     * 并在 {@link #calcWidthInPixels} 记录的区间内命中判断。
+     * 并按 {@link Inlay#getBounds()} 做命中判断（见 {@code CcmEditorOverlay}）。
+     *
+     * <p>摘要现在<b>始终</b>可点击：早期版本只有"多次调用"时才挂回调，
+     * 于是单次调用时点它毫无反应，用户会认为"这个提示是死的"。
      *
      * @param summary 摘要文本
-     * @param tooltip 悬停信息
+     * @param tooltip 悬停信息（完整入参与返回）
      * @param gutter  gutter 图标
-     * @param onClick 点击时执行；通常用于 index + 1 后重绘
+     * @param onClick 点击时执行
      * @return 渲染器
      */
-    public static CcmInlayRenderer forSummaryClickable(String summary, String tooltip,
-                                                       CcmGutterIcon gutter, Runnable onClick) {
+    public static CcmInlayRenderer forSummary(String summary, String tooltip,
+                                              CcmGutterIcon gutter, Runnable onClick) {
         return new CcmInlayRenderer(summary, tooltip, gutter, onClick);
     }
 

@@ -66,6 +66,10 @@
       </el-tooltip>
     </div>
 
+    <!-- 七个页签全部常驻（el-tab-pane 默认 lazily=false + v-show）：
+         不要改成 v-if / lazy —— 那会让每次切页都重新挂载表格和画布，
+         体感就是"切一下卡一下"，而且滚动位置、展开状态都会被重置。
+         各画布面板内部自己做视口渲染 + 布局缓存，所以常驻并不费内存。 -->
     <el-tabs v-model="activeTab" class="main-tabs">
       <el-tab-pane label="耗时热点" name="hotspot">
         <HotspotPanel :nodes="currentNodes" @jump="onJump" />

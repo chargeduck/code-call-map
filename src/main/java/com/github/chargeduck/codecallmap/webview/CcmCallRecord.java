@@ -145,6 +145,47 @@ public final class CcmCallRecord {
     }
 
     /**
+     * 把全部入参压成<b>一行</b>短文本，用于方法行尾的那条 inlay。
+     *
+     * <h2>为什么要压成一行</h2>
+     * inlay 是画在代码行末尾的，换行会把整行高度撑开、看起来像代码被挤断。
+     * 而且这里的目标只是"扫一眼认得出传了什么"，完整 JSON 在详情弹窗里。
+     *
+     * @param maxChars 整行最多字符数（超出直接截断并标注总数）
+     * @return 形如 {@code id=10086, qty=1}；没有入参时返回 null
+     */
+    public String shortArgsInline(int maxChars) {
+        if (args.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder(64);
+        int i = 0;
+        for (Map.Entry<String, String> e : args.entrySet()) {
+            String oneLine = e.getValue() == null ? "null"
+                    : e.getValue().replace('\n', ' ').replace('\r', ' ');
+            String piece = e.getKey() + "=" + oneLine;
+            // 单个值也可能很长，先各自截断，避免一个参数吃掉全部预算
+            if (piece.length() > 24) {
+                piece = piece.substring(0, 24) + "…";
+            }
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(piece);
+            i++;
+            if (sb.length() >= maxChars) {
+                sb.append(" …共").append(args.size()).append("项");
+                break;
+            }
+        }
+        String out = sb.toString();
+        if (out.length() > maxChars + 12) {
+            out = out.substring(0, maxChars + 12) + "…";
+        }
+        return out;
+    }
+
+    /**
      * 截断到指定长度，超出时保留前段并标注总量。
      *
      * @param s   原文

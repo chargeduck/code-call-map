@@ -13,6 +13,7 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -183,8 +184,22 @@ public final class CcmRecordDialog extends DialogWrapper {
         return sb.toString();
     }
 
+    /**
+     * 打开后把焦点交给正文区域，这样可以直接用键盘滚动、Ctrl+A 复制。
+     *
+     * <h2>为什么在 init() 里做，而不是重写 getPreferredFocusedComponent()</h2>
+     * 那个方法在 IntelliJ 平台的可见性变过 —— 2025.2 是 {@code protected}，
+     * 2025.3 改成 {@code public}。本仓库同一份代码要同时编出 233 与 253 两个
+     * 分支的包，任何一种写法都会在另一个平台上编不过（"正在尝试分配更低的访问权限"）。
+     * {@link #init()} 的签名多年未变，用它设置初始焦点最稳妥。
+     */
     @Override
-    public @Nullable JComponent getPreferredFocusedComponent() {
-        return area;
+    protected void init() {
+        super.init();
+        SwingUtilities.invokeLater(() -> {
+            if (area != null) {
+                area.requestFocusInWindow();
+            }
+        });
     }
 }

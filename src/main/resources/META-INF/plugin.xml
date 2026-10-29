@@ -30,6 +30,21 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li><b>1.0.2.63</b>：<b>Complete sequence diagram, faster tab switching, tidier editor hints</b>.
+                <br>&middot; <b>Sequence diagram now shows the whole round trip</b> — besides the
+                solid call arrow it draws the dashed return arrow, plus an activation bar that
+                spans from a call to its return, and lifelines stay pinned while you scroll.
+                <br>&middot; <b>Tab switching no longer stalls.</b> Canvas panels used to allocate a
+                canvas as tall as the entire call list and repaint all of it on every switch.
+                They now draw only the visible viewport, so switching between tabs is instant
+                and each panel keeps its scroll position.
+                <br>&middot; <b>Editor hints no longer cover your code.</b> Parameter values move
+                out of the code line into a single end-of-line summary
+                (<code>&#9654; 12ms &middot; 3 params &middot; has return &middot; 1/3</code>).
+                Click the summary or the gutter icon to open a read-only dialog with the full
+                arguments, return value and exception; when a method ran several times, step
+                through the recordings with Previous / Next.
+            </li>
             <li><b>1.0.1.60</b>：<b>Localized description, version separation for 2025.2 / 2025.3</b>.
                 <br>&middot; Plugin description and change notes are now available in Chinese
                 and English; the IDE picks the matching one from your UI language.

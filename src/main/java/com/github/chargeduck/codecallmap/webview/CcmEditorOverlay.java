@@ -7,44 +7,46 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.Inlay;
 import com.intellij.openapi.editor.LogicalPosition;
 import com.intellij.openapi.editor.ScrollType;
-import com.intellij.openapi.editor.impl.DocumentMarkupModel;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.fileEditor.TextEditor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiDocumentManager;
-import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiParameter;
 import com.intellij.psi.search.GlobalSearchScope;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * 把录制数据绘制到编辑器里的覆盖层。
  *
  * <h2>职责边界</h2>
- * 只做「找到方法 → 算偏移 → 加 inlay → 记住句柄以便清理」，不做数据读取
+ * 只做「找到方法 → 加 inlay → 记住句柄以便清理 → 响应点击」，不做数据读取
  * （那是 {@link CcmCallRecordReader}），也不做展示决策（那是 {@link CcmInlayRenderer}）。
  *
  * <h2>为什么每次都要先清空</h2>
  * 用户可能连续点时序图里不同的箭头，每次都是同一个编辑器。
  * 如果不在每次绘制前清掉上一批 inlay，灰字就会层层叠加，代码被挤得没法看。
  *
- * <h2>为什么全部在 EDT 上做</h2>
- * {@code InlayModel} 是编辑器模型的一部分，只能在写安全的上下文里改。
- * PSI 查询需要读锁，所以拆成两段：ReadAction 里取 PSI 信息，
- * EDT 里只做纯 UI 操作，避免在读锁里做 UI（会触发死锁检测）。
+ * <h2>为什么只在行尾放一条提示</h2>
+ * 早期版本把每个实参插在形参后面（{@code page(int page, int size)} 变成
+ * {@code page(int page = 1, int size = 20)}）。它确实"像 debug"，
+ * 但 inlay 会<b>占据真实的行内空间</b>：参数一多，整行代码被推到屏幕外，
+ * 用户反馈"提示把代码遮住了"。现在参数值统一收拢到行尾一处，
+ * 代码行宽度完全不受影响，完整内容点开看。
  *
  * @author chargeduck
  */
@@ -54,21 +56,26 @@ public final class CcmEditorOverlay {
     private final List<Inlay<?>> active = new ArrayList<>();
 
     /**
-     * 当前展示的上下文，供「点击切换下一条调用」时重绘使用。
+     * 已经装过点击监听的编辑器。
      *
-     * <p>切换只是把 {@code index} 改成下一条然后重画，不需要重新读文件、
-     * 也不需要重新做 PSI 定位，所以把这两样都缓存下来。
+     * <p>用 {@code WeakHashMap} 而不是普通 Map：编辑器销毁后不该再被强引用，
+     * 否则打开过多少文件就会残留多少个 key。
+     */
+    private final Map<Editor, MouseAdapter> clickHandlers = new WeakHashMap<>();
+
+    /**
+     * 当前展示的上下文，供「翻页 / 点开详情」时重绘使用。
      */
     private Context current;
 
     /**
      * 在编辑器里展示某方法的某一次调用。
      *
-     * @param project   项目
-     * @param className 全限定类名
+     * @param project    项目
+     * @param className  全限定类名
      * @param methodName 方法名
-     * @param records   该方法的所有调用记录（按时间升序）
-     * @param index     展示第几次（0-based，越界自动收敛）
+     * @param records    该方法的所有调用记录（按时间升序）
+     * @param index      展示第几次（0-based，越界自动收敛）
      * @return true=已成功绘制；false=未找到方法或无法定位
      */
     public boolean show(Project project, String className, String methodName,
@@ -80,7 +87,7 @@ public final class CcmEditorOverlay {
         int safeIndex = Math.max(0, Math.min(index, records.size() - 1));
         CcmCallRecord record = records.get(safeIndex);
 
-        // 第一段：读锁里取 PSI 信息（类、方法、参数名与偏移、文件）
+        // 第一段：读锁里取 PSI 信息（类、方法、文件、行号）
         MethodSite site = ReadAction.compute(() -> resolveSite(project, className, methodName));
         if (site == null) {
             return false;
@@ -97,9 +104,10 @@ public final class CcmEditorOverlay {
                 return;
             }
             clearInlays(editor);
-            // 记住上下文：点「1/3」切换下一条时靠它重绘
+            // 记住上下文：翻页 / 点开详情时靠它重绘
             current = new Context(project, site, records, safeIndex);
-            drawInlays(editor, site, record, records.size(), safeIndex);
+            drawSummary(editor, site, record, records.size(), safeIndex);
+            ensureClickHandler(editor);
             // 滚动到方法处，让用户立刻看到
             editor.getScrollingModel().scrollTo(
                     new LogicalPosition(editor.getDocument().getLineNumber(site.methodOffset), 0),
@@ -109,29 +117,24 @@ public final class CcmEditorOverlay {
     }
 
     /**
-     * 切到同一方法的下一条调用（循环）。
-     *
-     * <p>由行尾摘要 inlay 的点击回调触发。用户希望"同一方法被调了 5 次，
-     * 点一下看下一次"，这比重新在时序图里找箭头快得多。
+     * 切到同一方法的指定一次调用（循环），由弹窗翻页回调触发。
      *
      * @param editor 当前编辑器
+     * @param index  目标下标
      */
-    public void showNext(Editor editor) {
+    public void showIndex(Editor editor, int index) {
         Context ctx = current;
-        if (ctx == null || editor == null || ctx.records.size() <= 1) {
+        if (ctx == null || editor == null || ctx.records.isEmpty()) {
             return;
         }
-        int next = (ctx.index + 1) % ctx.records.size();
-        ctx.index = next;
-        CcmCallRecord record = ctx.records.get(next);
+        int n = ((index % ctx.records.size()) + ctx.records.size()) % ctx.records.size();
+        ctx.index = n;
         clearInlays(editor);
-        drawInlays(editor, ctx.site, record, ctx.records.size(), next);
+        drawSummary(editor, ctx.site, ctx.records.get(n), ctx.records.size(), n);
     }
 
     /**
      * 清理当前文件里的录制 inlay。
-     * <p>
-     * 由调用方在"关闭录制视图"时触发；切换方法时会自动先清。
      */
     public void clear() {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -141,6 +144,7 @@ public final class CcmEditorOverlay {
                 }
             }
             active.clear();
+            current = null;
         });
     }
 
@@ -149,7 +153,7 @@ public final class CcmEditorOverlay {
     // ------------------------------------------------------------------
 
     /**
-     * 定位方法在源码中的位置与参数信息。
+     * 定位方法在源码中的位置。
      *
      * @param project    项目
      * @param className  全限定类名
@@ -184,16 +188,8 @@ public final class CcmEditorOverlay {
         }
         int methodOffset = target.getTextOffset();
         int lineIndex = doc.getLineNumber(methodOffset);
-
-        // 参数名 -> 参数结束偏移（inlay 就插在参数后面）
-        List<ParamSite> params = new ArrayList<>();
-        for (PsiParameter p : target.getParameterList().getParameters()) {
-            if (p.getTextRange() == null) {
-                continue;
-            }
-            params.add(new ParamSite(p.getName(), p.getTextRange().getEndOffset()));
-        }
-        return new MethodSite(psiFile.getVirtualFile(), methodOffset, lineIndex, params);
+        return new MethodSite(psiFile.getVirtualFile(), methodOffset, lineIndex,
+                className + "#" + methodName);
     }
 
     // ------------------------------------------------------------------
@@ -201,101 +197,118 @@ public final class CcmEditorOverlay {
     // ------------------------------------------------------------------
 
     /**
-     * 在编辑器上绘制三类 inlay。
+     * 在方法签名行尾画一条录制摘要（唯一的一条 inlay）。
      *
-     * @param editor     编辑器
-     * @param site       方法位置信息
-     * @param record     本次要展示的调用记录
-     * @param total      该方法总调用次数（用于 tooltip 说明"第几次"）
-     * @param index      当前展示第几次（0-based）
+     * @param editor 编辑器
+     * @param site   方法位置信息
+     * @param record 本次要展示的调用记录
+     * @param total  该方法总调用次数（用于「第几次」标记）
+     * @param index  当前展示第几次（0-based）
      */
-    private void drawInlays(Editor editor, MethodSite site, CcmCallRecord record,
-                            int total, int index) {
-        // ---- A：参数后显示实参值 ----
-        for (ParamSite p : site.params) {
-            if (p.name == null) {
-                continue;
-            }
-            String value = record.shortArg(p.name);
-            if (value == null) {
-                continue;
-            }
-            Inlay<?> inlay = editor.getInlayModel()
-                    .addInlineElement(p.endOffset, true, CcmInlayRenderer.forArg(p.name, value));
-            if (inlay != null) {
-                active.add(inlay);
-            }
-        }
-
-        // ---- B：行尾汇总 + gutter 图标 ----
-        StringBuilder tip = new StringBuilder();
-        tip.append("第 ").append(index + 1).append('/').append(total).append(" 次调用\n");
-        tip.append("耗时 ").append(record.durationMs()).append("ms\n");
-        tip.append("\n── 入参 ──\n").append(record.fullArgsText());
-        tip.append("\n── 返回值 ──\n").append(record.fullRetText());
-        if (record.exception() != null) {
-            tip.append("\n── 异常 ──\n").append(record.exception());
-        }
-
-        boolean multi = total > 1;
-        String summaryText = "▶ " + record.shortSummary()
-                + (multi ? " · " + (index + 1) + "/" + total + "（点击切换）" : "");
-        // 多次调用时让行尾摘要可点击：点一下切到下一条。
-        // 交接文档里这条是"只做了一半"的缺口，这里补完。
-        Runnable onClick = multi ? () -> showNext(editor) : null;
-        CcmInlayRenderer summary = CcmInlayRenderer.forSummaryClickable(
-                summaryText, tip.toString(), new CcmGutterIcon(record), onClick);
-        Inlay<?> summaryInlay = editor.getInlayModel()
-                .addAfterLineEndElement(site.lineIndex, true, summary);
-        if (summaryInlay != null) {
-            active.add(summaryInlay);
-            if (onClick != null) {
-                installClickHandler(editor, summaryInlay, onClick);
-            }
+    private void drawSummary(Editor editor, MethodSite site, CcmCallRecord record,
+                             int total, int index) {
+        String summary = buildSummary(record, total, index);
+        Runnable onClick = () -> openDetails(editor);
+        CcmInlayRenderer renderer = CcmInlayRenderer.forSummary(
+                summary, buildTooltip(record, total, index), new CcmGutterIcon(record, site.title), onClick);
+        Inlay<?> inlay = editor.getInlayModel()
+                .addAfterLineEndElement(site.lineIndex, true, renderer);
+        if (inlay != null) {
+            active.add(inlay);
         }
     }
 
     /**
-     * 给 inlay 挂鼠标点击监听。
+     * 行尾摘要文本。
      *
-     * <h2>为什么必须自己挂 MouseListener</h2>
-     * {@code EditorCustomElementRenderer} 没有点击接口。inlay 是画在编辑器
-     * 文本区里的图形，要响应点击只能监听 contentComponent 的鼠标事件，
-     * 再按 inlay 自己的 {@link Inlay#getBounds()} 做命中判断。
+     * <p>形如 {@code ▶ 412ms · id=10086, qty=1 · 1/3}。
+     * 参数值在这里"收拢成一处"，不再插进形参中间，
+     * 所以代码行宽度不受影响；完整 JSON 仍然在弹窗里。
      *
-     * <p>监听器随 inlay 一起失效：inlay 被 dispose 后 {@code isValid()} 为 false，
-     * 监听里直接忽略，不需要额外注销（编辑器销毁时 contentComponent 也会回收）。
-     *
-     * @param editor  编辑器
-     * @param inlay   目标 inlay
-     * @param onClick 命中后执行
+     * @param record 调用记录
+     * @param total  总次数
+     * @param index  当前下标
+     * @return 一行摘要
      */
-    private static void installClickHandler(Editor editor, Inlay<?> inlay, Runnable onClick) {
-        java.awt.event.MouseAdapter listener = new java.awt.event.MouseAdapter() {
+    private static String buildSummary(CcmCallRecord record, int total, int index) {
+        StringBuilder sb = new StringBuilder("▶ ");
+        sb.append(record.durationMs()).append("ms");
+        String args = record.shortArgsInline(48);
+        if (args != null && !args.isEmpty()) {
+            sb.append(" · ").append(args);
+        }
+        if (record.exception() != null && !record.exception().isBlank()) {
+            sb.append(" · ⚠ 异常");
+        }
+        if (total > 1) {
+            sb.append(" · ").append(index + 1).append('/').append(total);
+        }
+        sb.append("  点击看详情");
+        return sb.toString();
+    }
+
+    /** 悬停时的兜底提示（部分平台上 inlay 不显示 tooltip，因此点击才是主入口）。 */
+    private static String buildTooltip(CcmCallRecord record, int total, int index) {
+        return "第 " + (index + 1) + "/" + total + " 次调用，耗时 "
+                + record.durationMs() + "ms（点击查看入参与返回值）";
+    }
+
+    /**
+     * 给编辑器挂点击监听（每个编辑器只挂一次）。
+     *
+     * <h2>为什么要自己挂 MouseListener</h2>
+     * {@code EditorCustomElementRenderer} 没有"点击动作"接口 ——
+     * 那是 {@code GutterIconRenderer} 才有的。inlay 想响应点击，
+     * 只能监听 contentComponent 的鼠标事件，再按 inlay 自己的
+     * {@link Inlay#getBounds()} 做命中判断。
+     *
+     * <p>旧实现是<b>每加一条 inlay 就 add 一个 listener</b>，
+     * 同一个文件点几次就叠几个监听，还会给每个监听都注册一次
+     * EditorFactoryListener（永不注销）。这里改成每个编辑器只挂一个。
+     *
+     * @param editor 编辑器
+     */
+    private void ensureClickHandler(Editor editor) {
+        if (clickHandlers.containsKey(editor)) {
+            return;
+        }
+        MouseAdapter listener = new MouseAdapter() {
             @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (!inlay.isValid()) {
-                    return;
-                }
-                Rectangle bounds = inlay.getBounds();
-                if (bounds != null && bounds.contains(e.getPoint())) {
-                    onClick.run();
-                }
+            public void mouseClicked(MouseEvent e) {
+                handleClick(editor, e.getPoint());
             }
         };
         editor.getContentComponent().addMouseListener(listener);
-        // 编辑器释放时移除监听，避免长期打开多个文件后监听器越积越多。
-        // 用 EditorFactory 的编辑器释放事件而不是 Disposer ——
-        // Editor 接口本身没有 getDisposable()，它挂在文件编辑器下面。
-        com.intellij.openapi.editor.EditorFactory.getInstance()
-                .addEditorFactoryListener(new com.intellij.openapi.editor.event.EditorFactoryListener() {
-                    @Override
-                    public void editorReleased(@NotNull com.intellij.openapi.editor.event.EditorFactoryEvent event) {
-                        if (event.getEditor() == editor) {
-                            editor.getContentComponent().removeMouseListener(listener);
-                        }
-                    }
-                }, editor.getProject());
+        clickHandlers.put(editor, listener);
+    }
+
+    /** 命中哪条 inlay 就执行它的回调。 */
+    private void handleClick(Editor editor, Point point) {
+        for (Inlay<?> inlay : new ArrayList<>(active)) {
+            if (inlay == null || !inlay.isValid()) {
+                continue;
+            }
+            if (!(inlay.getRenderer() instanceof CcmInlayRenderer)) {
+                continue;
+            }
+            Rectangle bounds = inlay.getBounds();
+            if (bounds != null && bounds.contains(point)) {
+                openDetails(editor);
+                return;
+            }
+        }
+    }
+
+    /** 打开只读详情弹窗（可翻页，翻页时同步刷新行尾提示）。 */
+    private void openDetails(Editor editor) {
+        Context ctx = current;
+        if (ctx == null) {
+            return;
+        }
+        CcmRecordDialog dialog = new CcmRecordDialog(
+                ctx.project, ctx.site.title, ctx.records, ctx.index,
+                i -> showIndex(editor, i));
+        dialog.show();
     }
 
     /**
@@ -339,29 +352,19 @@ public final class CcmEditorOverlay {
         final VirtualFile file;
         final int methodOffset;
         final int lineIndex;
-        final List<ParamSite> params;
+        /** 「类#方法」，用于弹窗标题。 */
+        final String title;
 
-        MethodSite(VirtualFile file, int methodOffset, int lineIndex, List<ParamSite> params) {
+        MethodSite(VirtualFile file, int methodOffset, int lineIndex, String title) {
             this.file = file;
             this.methodOffset = methodOffset;
             this.lineIndex = lineIndex;
-            this.params = params;
-        }
-    }
-
-    /** 参数名与结束偏移。 */
-    private static final class ParamSite {
-        final String name;
-        final int endOffset;
-
-        ParamSite(String name, int endOffset) {
-            this.name = name;
-            this.endOffset = endOffset;
+            this.title = title;
         }
     }
 
     /**
-     * 当前展示上下文：切换"下一条调用"时不必重新读文件、重新做 PSI 定位。
+     * 当前展示上下文：翻页 / 打开详情时不必重新读文件、重新做 PSI 定位。
      */
     private static final class Context {
         final Project project;
@@ -372,7 +375,7 @@ public final class CcmEditorOverlay {
         Context(Project project, MethodSite site, List<CcmCallRecord> records, int index) {
             this.project = project;
             this.site = site;
-            this.records = records;
+            this.records = Collections.unmodifiableList(records);
             this.index = index;
         }
     }

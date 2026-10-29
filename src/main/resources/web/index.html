@@ -176,68 +176,92 @@ var __async = (__this, __arguments, generator) => {
   background: #2b2d30;
 }\r
 
-.panel-wrap[data-v-1afe3b31] { position: relative; height: 100%;
+.panel-wrap[data-v-3cd47d7e] { position: relative; height: 100%; overflow: hidden;
 }\r
 \r
-/* overflow:auto —— 内容超宽时出横向滚动条，超高时出纵向滚动条 */
-.wf-scroll[data-v-1afe3b31] {\r
+/* overflow:auto —— 内容超宽出横向滚动条，超高出纵向滚动条 */
+.wf-scroll[data-v-3cd47d7e] {\r
   width: 100%;\r
   height: 100%;\r
-  overflow: auto;
+  overflow: auto;\r
+  position: relative;
 }
-canvas[data-v-1afe3b31] { display: block;
+.wf-inner[data-v-3cd47d7e] { position: relative; min-width: 100%; min-height: 100%;
+}\r
+/* 画布钉在滚动视口左上角，永远只有一屏大小 */
+.wf-canvas[data-v-3cd47d7e] { position: sticky; top: 0; left: 0; display: block;
 }
-.empty[data-v-1afe3b31] {\r
+.empty[data-v-3cd47d7e] {\r
   position: absolute; top: 40%; width: 100%; text-align: center;\r
   color: #666; font-size: 14px;
 }
-.legend[data-v-1afe3b31] {\r
+.legend[data-v-3cd47d7e] {\r
   position: absolute; top: 8px; right: 12px; font-size: 11px;\r
   color: #8a8a8a; background: rgba(0, 0, 0, .45); padding: 4px 8px;\r
   border-radius: 4px; pointer-events: none;
 }
-.tip[data-v-1afe3b31] {\r
+.tip[data-v-3cd47d7e] {\r
   position: absolute; z-index: 10;\r
   background: #2b2d30; border: 1px solid #4d6a8f; border-radius: 4px;\r
   padding: 6px 9px; font-size: 11px; color: #c8c8c8;\r
   pointer-events: none; box-shadow: 0 3px 10px rgba(0, 0, 0, .45);\r
   max-width: 440px;
 }
-.tip-title[data-v-1afe3b31] {\r
+.tip-title[data-v-3cd47d7e] {\r
   font-family: Consolas, Monaco, monospace; color: #6cb6ff;\r
   margin-bottom: 3px; word-break: break-all;
 }
-.tip-row[data-v-1afe3b31] { color: #9a9a9a;
+.tip-row[data-v-3cd47d7e] { color: #9a9a9a;
 }
-.tip-row.exc[data-v-1afe3b31] { color: #e06c6c;
+.tip-row.exc[data-v-3cd47d7e] { color: #e06c6c;
 }\r
 
-.seq-wrap[data-v-f5edeeff] { position: relative; height: 100%;
+.seq-wrap[data-v-4d1e64a1] {\r
+  position: relative;\r
+  height: 100%;\r
+  overflow: hidden;
 }\r
 \r
-/* 双向滚动：时序图的宽度随参与者数量增长，不横滚就必然被压扁。\r
-   overflow:auto 会自动在需要时出现横向 / 纵向滚动条。 */
-.seq-scroll[data-v-f5edeeff] {\r
+/* 双向滚动：宽度随参与者数量增长，高度随消息条数增长，\r
+   两者都由 .seq-inner 撑开，画布只占视口 */
+.seq-scroll[data-v-4d1e64a1] {\r
   width: 100%;\r
   height: 100%;\r
-  overflow: auto;
+  overflow: auto;\r
+  position: relative;
 }
-canvas[data-v-f5edeeff] { display: block;
+.seq-inner[data-v-4d1e64a1] {\r
+  position: relative;\r
+  min-width: 100%;\r
+  min-height: 100%;
+}\r
+/* sticky 让画布钉在滚动视口的左上角：\r
+   滚动条照常工作，但画布始终只有一屏大小 */
+.seq-canvas[data-v-4d1e64a1] {\r
+  position: sticky;\r
+  top: 0;\r
+  left: 0;\r
+  display: block;
 }
-.empty[data-v-f5edeeff] {\r
+.empty[data-v-4d1e64a1] {\r
   position: absolute; top: 40%; width: 100%; text-align: center;\r
   color: #666; font-size: 14px;
 }
-.legend[data-v-f5edeeff] {\r
+.legend[data-v-4d1e64a1] {\r
   position: absolute; top: 8px; right: 12px; font-size: 11px;\r
-  color: #8a8a8a; background: rgba(0, 0, 0, .45); padding: 4px 8px;\r
-  border-radius: 4px; pointer-events: none; max-width: 60%;
+  color: #8a8a8a; background: rgba(0, 0, 0, .55); padding: 4px 8px;\r
+  border-radius: 4px; pointer-events: none; max-width: 62%;
 }
-.legend .hint[data-v-f5edeeff] { color: #666;
+.legend .hint[data-v-4d1e64a1] { color: #666;
+}
+.legend .trace-id[data-v-4d1e64a1] {\r
+  display: block; margin-top: 2px; color: #5f6b7a;\r
+  font-family: Consolas, Monaco, monospace; font-size: 10px;\r
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }\r
 \r
 /* 悬浮提示：跟随鼠标，不拦截事件 */
-.tip[data-v-f5edeeff] {\r
+.tip[data-v-4d1e64a1] {\r
   position: absolute;\r
   z-index: 10;\r
   background: #2b2d30;\r
@@ -250,15 +274,15 @@ canvas[data-v-f5edeeff] { display: block;
   box-shadow: 0 3px 10px rgba(0, 0, 0, .45);\r
   max-width: 420px;
 }
-.tip-title[data-v-f5edeeff] {\r
+.tip-title[data-v-4d1e64a1] {\r
   font-family: Consolas, Monaco, monospace;\r
   color: #6cb6ff;\r
   margin-bottom: 3px;\r
   word-break: break-all;
 }
-.tip-row[data-v-f5edeeff] { color: #9a9a9a;
+.tip-row[data-v-4d1e64a1] { color: #9a9a9a;
 }
-.tip-row.caller[data-v-f5edeeff] { color: #7a7a7a; font-size: 10px;
+.tip-row.caller[data-v-4d1e64a1] { color: #7a7a7a; font-size: 10px;
 }\r
 
 .table-wrap[data-v-24555f12] {\r
@@ -583,14 +607,14 @@ canvas[data-v-f5edeeff] { display: block;
 .empty[data-v-4e392970] { padding: 40px; text-align: center; color: #6a6a6a;
 }\r
 
-.callmap-app[data-v-23c4a692] {\r
+.callmap-app[data-v-5b3ceff0] {\r
   height: 100vh;\r
   display: flex;\r
   flex-direction: column;\r
   background: #1e1f22;\r
   color: #c8c8c8;
 }
-.toolbar[data-v-23c4a692] {\r
+.toolbar[data-v-5b3ceff0] {\r
   display: flex;\r
   align-items: center;\r
   gap: 8px;\r
@@ -605,11 +629,11 @@ canvas[data-v-f5edeeff] { display: block;
    trace 下拉从 300 收到 240、搜索框 260 → 220，\r
    否则 1920 以下的屏幕会把 status 挤掉行。\r
    注意：列宽只能靠显式 width，el-select 不会自动收缩。 */
-.trace-select[data-v-23c4a692] { width: 240px;
+.trace-select[data-v-5b3ceff0] { width: 240px;
 }
-.session-select[data-v-23c4a692] { width: 170px;
+.session-select[data-v-5b3ceff0] { width: 170px;
 }
-.auto-refresh[data-v-23c4a692] {\r
+.auto-refresh[data-v-5b3ceff0] {\r
   /* 与深色工具栏对齐，且不抢按钮的视觉权重 */\r
   --el-checkbox-text-color: #b8b8b8;\r
   --el-checkbox-checked-text-color: #d0d0d0;\r
@@ -617,7 +641,7 @@ canvas[data-v-f5edeeff] { display: block;
   font-size: 12px;
 }\r
 /* 慢调用徽标：用琥珀色，与"警告"语义一致但不刺眼 */
-.slow-badge[data-v-23c4a692] {\r
+.slow-badge[data-v-5b3ceff0] {\r
   font-size: 11px;\r
   color: #e0a050;\r
   border: 1px solid #6b5232;\r
@@ -627,7 +651,7 @@ canvas[data-v-f5edeeff] { display: block;
   cursor: help;\r
   white-space: nowrap;
 }
-.status[data-v-23c4a692] {\r
+.status[data-v-5b3ceff0] {\r
   margin-left: auto;\r
   color: #8a8a8a;\r
   font-size: 11px;\r
@@ -636,25 +660,25 @@ canvas[data-v-f5edeeff] { display: block;
   text-overflow: ellipsis;\r
   white-space: nowrap;
 }
-.main-tabs[data-v-23c4a692] {\r
+.main-tabs[data-v-5b3ceff0] {\r
   flex: 1;\r
   min-height: 0;\r
   display: flex;\r
   flex-direction: column;
 }
-.main-tabs[data-v-23c4a692] .el-tabs__header {\r
+.main-tabs[data-v-5b3ceff0] .el-tabs__header {\r
   margin: 0;\r
   padding: 0 12px;\r
   background: #26282b;\r
   flex-shrink: 0;
 }
-.main-tabs[data-v-23c4a692] .el-tabs__content {\r
+.main-tabs[data-v-5b3ceff0] .el-tabs__content {\r
   flex: 1;\r
   min-height: 0;\r
   overflow: hidden;\r
   padding: 0;
 }
-.main-tabs[data-v-23c4a692] .el-tab-pane {\r
+.main-tabs[data-v-5b3ceff0] .el-tab-pane {\r
   height: 100%;
 }\r
 /*$vite$:1*/`;
@@ -37601,7 +37625,7 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
   const _hoisted_4$k = ["tabindex", "aria-disabled"];
   const _hoisted_5$g = ["tabindex", "aria-disabled"];
   const _hoisted_6$9 = ["aria-label", "disabled"];
-  const _hoisted_7$5 = ["aria-label", "disabled"];
+  const _hoisted_7$6 = ["aria-label", "disabled"];
   var panel_date_pick_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ defineComponent({
     __name: "panel-date-pick",
     props: panelDatePickProps,
@@ -38172,7 +38196,7 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
               }, [renderSlot(_ctx.$slots, "next-year", {}, () => [createVNode(unref(ElIcon), null, {
                 default: withCtx(() => [createVNode(unref(d_arrow_right_default))]),
                 _: 1
-              })])], 10, _hoisted_7$5)], 2)
+              })])], 10, _hoisted_7$6)], 2)
             ], 2), [[vShow, currentView.value !== "time"]]),
             createBaseVNode("div", {
               class: normalizeClass(unref(ppNs).e("content")),
@@ -38487,9 +38511,9 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
   const _hoisted_4$j = ["disabled", "aria-label"];
   const _hoisted_5$f = ["disabled", "aria-label"];
   const _hoisted_6$8 = ["tabindex", "aria-disabled"];
-  const _hoisted_7$4 = ["tabindex", "aria-disabled"];
-  const _hoisted_8$4 = ["disabled", "aria-label"];
-  const _hoisted_9$4 = ["disabled", "aria-label"];
+  const _hoisted_7$5 = ["tabindex", "aria-disabled"];
+  const _hoisted_8$5 = ["disabled", "aria-label"];
+  const _hoisted_9$5 = ["disabled", "aria-label"];
   const _hoisted_10$3 = ["aria-label", "disabled"];
   const _hoisted_11$3 = ["disabled", "aria-label"];
   const _hoisted_12$2 = ["tabindex", "aria-disabled"];
@@ -38971,7 +38995,7 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
                   class: normalizeClass([unref(drpNs).e("header-label"), { active: unref(leftCurrentView) === "month" }]),
                   onKeydown: _cache[12] || (_cache[12] = withKeys(($event) => unref(showLeftPicker)("month"), ["enter"])),
                   onClick: _cache[13] || (_cache[13] = ($event) => unref(showLeftPicker)("month"))
-                }, toDisplayString(unref(t)(`el.datepicker.month${leftDate.value.month() + 1}`)), 43, _hoisted_7$4), [[vShow, unref(leftCurrentView) === "date"]])])
+                }, toDisplayString(unref(t)(`el.datepicker.month${leftDate.value.month() + 1}`)), 43, _hoisted_7$5), [[vShow, unref(leftCurrentView) === "date"]])])
               ], 2),
               unref(leftCurrentView) === "date" ? (openBlock(), createBlock(basic_date_table_default, {
                 key: 0,
@@ -39051,7 +39075,7 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
                 }, [renderSlot(_ctx.$slots, "prev-year", {}, () => [createVNode(unref(ElIcon), null, {
                   default: withCtx(() => [createVNode(unref(d_arrow_left_default))]),
                   _: 1
-                })])], 10, _hoisted_8$4)) : createCommentVNode("v-if", true),
+                })])], 10, _hoisted_8$5)) : createCommentVNode("v-if", true),
                 _ctx.unlinkPanels && unref(rightCurrentView) === "date" ? (openBlock(), createElementBlock("button", {
                   key: 1,
                   type: "button",
@@ -39062,7 +39086,7 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
                 }, [renderSlot(_ctx.$slots, "prev-month", {}, () => [createVNode(unref(ElIcon), null, {
                   default: withCtx(() => [createVNode(unref(arrow_left_default))]),
                   _: 1
-                })])], 10, _hoisted_9$4)) : createCommentVNode("v-if", true),
+                })])], 10, _hoisted_9$5)) : createCommentVNode("v-if", true),
                 createBaseVNode("button", {
                   type: "button",
                   "aria-label": unref(t)(`el.datepicker.nextYear`),
@@ -42632,9 +42656,9 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
   const _hoisted_4$e = ["stop-color"];
   const _hoisted_5$b = ["id"];
   const _hoisted_6$7 = ["stop-color"];
-  const _hoisted_7$3 = ["stop-color"];
-  const _hoisted_8$3 = ["id"];
-  const _hoisted_9$3 = {
+  const _hoisted_7$4 = ["stop-color"];
+  const _hoisted_8$4 = ["id"];
+  const _hoisted_9$4 = {
     stroke: "none",
     "stroke-width": "1",
     fill: "none",
@@ -42687,15 +42711,15 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
           }, null, 8, _hoisted_6$7), createBaseVNode("stop", {
             "stop-color": `var(${unref(ns).cssVarBlockName("fill-color-6")})`,
             offset: "100%"
-          }, null, 8, _hoisted_7$3)], 8, _hoisted_5$b),
+          }, null, 8, _hoisted_7$4)], 8, _hoisted_5$b),
           createBaseVNode("rect", {
             id: `path-3-${unref(id)}`,
             x: "0",
             y: "0",
             width: "17",
             height: "36"
-          }, null, 8, _hoisted_8$3)
-        ]), createBaseVNode("g", _hoisted_9$3, [createBaseVNode("g", _hoisted_10$2, [createBaseVNode("g", _hoisted_11$2, [
+          }, null, 8, _hoisted_8$4)
+        ]), createBaseVNode("g", _hoisted_9$4, [createBaseVNode("g", _hoisted_10$2, [createBaseVNode("g", _hoisted_11$2, [
           createBaseVNode("path", {
             d: "M39.5,86 C61.3152476,86 79,83.9106622 79,81.3333333 C79,78.7560045 57.3152476,78 35.5,78 C13.6847524,78 0,78.7560045 0,81.3333333 C0,83.9106622 17.6847524,86 39.5,86 Z",
             fill: `var(${unref(ns).cssVarBlockName("fill-color-3")})`
@@ -68778,12 +68802,12 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
     key: 1,
     class: "dim"
   };
-  const _hoisted_7$2 = {
+  const _hoisted_7$3 = {
     key: 1,
     class: "empty"
   };
-  const _hoisted_8$2 = { class: "section" };
-  const _hoisted_9$2 = { class: "self" };
+  const _hoisted_8$3 = { class: "section" };
+  const _hoisted_9$3 = { class: "self" };
   const _hoisted_10$1 = { class: "bar-wrap" };
   const _hoisted_11$1 = {
     key: 1,
@@ -68920,9 +68944,9 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
                 })
               ]),
               _: 1
-            }, 8, ["data"])) : (openBlock(), createElementBlock("div", _hoisted_7$2, "暂无耗时数据（点击上方「加载真实数据」）"))
+            }, 8, ["data"])) : (openBlock(), createElementBlock("div", _hoisted_7$3, "暂无耗时数据（点击上方「加载真实数据」）"))
           ]),
-          createBaseVNode("div", _hoisted_8$2, [
+          createBaseVNode("div", _hoisted_8$3, [
             _cache[1] || (_cache[1] = createBaseVNode("div", { class: "section-title" }, [
               createTextVNode(" 按类聚合 "),
               createBaseVNode("span", { class: "hint" }, "哪个类的代码占用了最多时间")
@@ -68947,7 +68971,7 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
                   align: "right"
                 }, {
                   default: withCtx(({ row }) => [
-                    createBaseVNode("span", _hoisted_9$2, toDisplayString(fmt(row.selfMs)), 1)
+                    createBaseVNode("span", _hoisted_9$3, toDisplayString(fmt(row.selfMs)), 1)
                   ]),
                   _: 1
                 }),
@@ -69010,13 +69034,15 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
     class: "empty"
   };
   const ROW_H = 30;
-  const PAD_TOP$1 = 46;
+  const PAD_TOP = 46;
+  const HEAD_H$1 = 40;
   const LABEL_FONT$1 = "11px ui-monospace, Consolas, Monaco, monospace";
   const DUR_FONT = "11px Consolas, Monaco, monospace";
   const MIN_NAME_W = 150;
   const MAX_NAME_W = 420;
   const TIME_COL_W = 92;
   const GAP = 10;
+  const C_BG$1 = "#1e1f22";
   const _sfc_main$6 = {
     __name: "WaterfallPanel",
     props: {
@@ -69030,110 +69056,138 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
       const canvasEl = /* @__PURE__ */ ref(null);
       const scrollEl = /* @__PURE__ */ ref(null);
       const isEmpty2 = /* @__PURE__ */ ref(true);
+      const contentW = /* @__PURE__ */ ref(0);
+      const contentH = /* @__PURE__ */ ref(0);
       const tip = /* @__PURE__ */ reactive({ visible: false, x: 0, y: 0, label: "", duration: "", self: "", exc: "" });
-      let layout2 = { padL: 0, nameW: 0, plotW: 0, scale: 1, minT: 0, maxT: 1, rows: [], w: 0, h: 0 };
-      function computeLayout(ctx) {
-        const nodes = (props.nodes || []).slice().sort((a2, b2) => a2.start - b2.start);
+      let layout2 = null;
+      let layoutNodes = null;
+      function computeLayout(nodes) {
         if (!nodes.length) return null;
-        let minT = Infinity, maxT = -Infinity;
-        nodes.forEach((n) => {
+        const sorted = nodes.slice().sort((a2, b2) => a2.start - b2.start);
+        let minT = Infinity;
+        let maxT = -Infinity;
+        sorted.forEach((n) => {
           minT = Math.min(minT, n.start);
           maxT = Math.max(maxT, n.end);
         });
         if (minT === Infinity) return null;
         if (maxT === minT) maxT = minT + 1;
-        ctx.font = LABEL_FONT$1;
+        const probe = document.createElement("canvas").getContext("2d");
+        probe.font = LABEL_FONT$1;
         let nameW = MIN_NAME_W;
-        nodes.forEach((n) => {
+        sorted.forEach((n) => {
           const indent = 6 + (n.depth || 0) * 10;
-          const w2 = ctx.measureText(n.label || "").width + indent + 16;
+          const w2 = probe.measureText(n.label || "").width + indent + 16;
           nameW = Math.max(nameW, Math.min(MAX_NAME_W, w2));
         });
         const padL = nameW + TIME_COL_W * 2 + GAP * 3;
-        layout2 = { nameW, padL, minT, maxT, rows: nodes };
+        const h2 = PAD_TOP + sorted.length * ROW_H + 24;
+        return { nameW, padL, minT, maxT, rows: sorted, h: h2, w: padL + 260 };
+      }
+      function ensureLayout(nodes) {
+        if (layoutNodes === nodes && layout2) return layout2;
+        layoutNodes = nodes;
+        layout2 = computeLayout(nodes || []);
         return layout2;
       }
-      function prepareCanvas2() {
-        var _a2, _b;
-        const canvas = canvasEl.value;
-        const scroll = scrollEl.value;
-        if (!canvas || !scroll) return null;
-        const L2 = layout2;
-        const dpr = window.devicePixelRatio || 1;
-        canvas.style.width = "0px";
-        canvas.style.height = "0px";
-        const viewportW = scroll.clientWidth || ((_a2 = scroll.parentElement) == null ? void 0 : _a2.clientWidth) || 600;
-        const viewportH = scroll.clientHeight || ((_b = scroll.parentElement) == null ? void 0 : _b.clientHeight) || 320;
-        const requiredW = L2.padL + 260;
-        const contentH = PAD_TOP$1 + L2.rows.length * ROW_H + 24;
-        const cssW = Math.max(requiredW, viewportW);
-        const cssH = Math.max(contentH, viewportH);
-        canvas.width = Math.floor(cssW * dpr);
-        canvas.height = Math.floor(cssH * dpr);
-        canvas.style.width = cssW + "px";
-        canvas.style.height = cssH + "px";
-        const ctx = canvas.getContext("2d");
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx, w: cssW, h: cssH };
+      let rafId = 0;
+      let timerId = 0;
+      function cancelPendingDraw() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = 0;
+        }
+      }
+      function scheduleDraw() {
+        if (!props.active) return;
+        if (rafId || timerId) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = 0;
+          if (timerId) {
+            clearTimeout(timerId);
+            timerId = 0;
+          }
+          draw();
+        });
+        timerId = setTimeout(() => {
+          timerId = 0;
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = 0;
+          }
+          draw();
+        }, 150);
       }
       function draw() {
-        if (!props.active) return;
-        isEmpty2.value = (props.nodes || []).length === 0;
         const canvas = canvasEl.value;
+        const scroll = scrollEl.value;
+        if (!canvas || !scroll) return;
+        const nodes = props.nodes || [];
+        isEmpty2.value = nodes.length === 0;
+        const viewW = scroll.clientWidth;
+        const viewH = scroll.clientHeight;
+        if (!viewW || !viewH) return;
+        const dpr = window.devicePixelRatio || 1;
+        const pxW = Math.floor(viewW * dpr);
+        const pxH = Math.floor(viewH * dpr);
+        if (canvas.width !== pxW || canvas.height !== pxH) {
+          canvas.width = pxW;
+          canvas.height = pxH;
+          canvas.style.width = viewW + "px";
+          canvas.style.height = viewH + "px";
+        }
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, viewW, viewH);
         if (isEmpty2.value) {
-          if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+          if (contentW.value) contentW.value = 0;
+          if (contentH.value) contentH.value = 0;
           return;
         }
-        const probe = document.createElement("canvas").getContext("2d");
-        if (!computeLayout(probe)) return;
-        const p2 = prepareCanvas2();
-        if (!p2) return;
-        const { ctx, w: W2, h: H } = p2;
-        const L2 = layout2;
-        const { minT, maxT, padL, nameW } = L2;
-        const plotW = Math.max(60, W2 - padL - 40);
-        const scale = plotW / (maxT - minT);
-        layout2.plotW = plotW;
-        layout2.scale = scale;
-        const x2 = (t) => padL + (t - minT) * scale;
-        ctx.clearRect(0, 0, W2, H);
-        ctx.font = DUR_FONT;
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = "#8a8a8a";
-        ctx.textAlign = "left";
-        ctx.fillText("方法", 6, PAD_TOP$1 - 16);
-        ctx.textAlign = "right";
-        ctx.fillText("自身", nameW + TIME_COL_W, PAD_TOP$1 - 16);
-        ctx.fillText("总耗时", nameW + TIME_COL_W * 2 + GAP, PAD_TOP$1 - 16);
-        ctx.textAlign = "left";
-        const step2 = niceStep((maxT - minT) / 6);
-        for (let t = Math.ceil(minT / step2) * step2; t <= maxT; t += step2) {
+        const L2 = ensureLayout(nodes);
+        if (!L2) return;
+        const W2 = Math.max(L2.padL + 260, viewW);
+        if (contentW.value !== W2) contentW.value = W2;
+        if (contentH.value !== L2.h) contentH.value = L2.h;
+        const sx = scroll.scrollLeft;
+        const sy = scroll.scrollTop;
+        const plotW = Math.max(60, W2 - L2.padL - 40);
+        const scale = plotW / (L2.maxT - L2.minT);
+        const x2 = (t) => L2.padL + (t - L2.minT) * scale;
+        ctx.save();
+        ctx.translate(-sx, -sy);
+        const step2 = niceStep((L2.maxT - L2.minT) / 6);
+        for (let t = Math.ceil(L2.minT / step2) * step2; t <= L2.maxT; t += step2) {
           const tx = x2(t);
           ctx.strokeStyle = "#3c3f41";
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.moveTo(tx, PAD_TOP$1 - 6);
-          ctx.lineTo(tx, H - 10);
+          ctx.moveTo(tx, PAD_TOP - 6);
+          ctx.lineTo(tx, L2.h - 10);
           ctx.stroke();
-          ctx.fillStyle = "#6a6a6a";
-          ctx.font = "10px sans-serif";
-          ctx.fillText(formatDurationAxis(t - minT), tx + 2, PAD_TOP$1 - 16);
         }
         ctx.strokeStyle = "#3c3f41";
         ctx.beginPath();
-        ctx.moveTo(padL - GAP / 2, PAD_TOP$1 - 26);
-        ctx.lineTo(padL - GAP / 2, H - 10);
+        ctx.moveTo(L2.padL - GAP / 2, PAD_TOP - 26);
+        ctx.lineTo(L2.padL - GAP / 2, L2.h - 10);
         ctx.stroke();
-        L2.rows.forEach((n, i) => {
-          const y = PAD_TOP$1 + i * ROW_H;
-          if (y > H - 4) return;
-          const x0 = x2(n.start), x1 = x2(n.end);
-          const selfMs = n.selfMs != null ? n.selfMs : n.durationMs || 0;
-          const color = n.exception ? "#e06c6c" : selfMs > 300 ? "#e06c6c" : selfMs > 100 ? "#e0a050" : "#4caf50";
+        const i0 = Math.max(0, Math.floor((sy - PAD_TOP) / ROW_H));
+        const i1 = Math.min(L2.rows.length - 1, Math.ceil((sy + viewH - PAD_TOP) / ROW_H));
+        for (let i = i0; i <= i1; i++) {
+          const n = L2.rows[i];
+          const y = PAD_TOP + i * ROW_H;
           if (i % 2 === 1) {
             ctx.fillStyle = "rgba(255,255,255,0.02)";
             ctx.fillRect(0, y, W2, ROW_H);
           }
+          const x0 = x2(n.start);
+          const x1 = x2(n.end);
+          const selfMs = n.selfMs != null ? n.selfMs : n.durationMs || 0;
+          const color = n.exception ? "#e06c6c" : selfMs > 300 ? "#e06c6c" : selfMs > 100 ? "#e0a050" : "#4caf50";
           ctx.fillStyle = "rgba(255,255,255,0.06)";
           ctx.fillRect(x0, y + 6, Math.max(2, x1 - x0), ROW_H - 12);
           ctx.fillStyle = color;
@@ -69141,26 +69195,56 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
           const indent = 6 + (n.depth || 0) * 10;
           ctx.font = LABEL_FONT$1;
           ctx.fillStyle = "#c8c8c8";
-          const maxNameW = nameW - indent - 4;
+          const maxNameW = L2.nameW - indent - 4;
+          ctx.textAlign = "left";
           ctx.fillText(clip(ctx, n.label || "", maxNameW), indent, y + ROW_H / 2);
           ctx.font = DUR_FONT;
           ctx.textAlign = "right";
           if (n.selfMs != null && n.childCount > 0 && n.selfMs > 0) {
             ctx.fillStyle = "#8a8a8a";
-            ctx.fillText(formatDuration(n.selfMs), nameW + TIME_COL_W, y + ROW_H / 2);
+            ctx.fillText(formatDuration(n.selfMs), L2.nameW + TIME_COL_W, y + ROW_H / 2);
           } else {
             ctx.fillStyle = "#4a4a4a";
-            ctx.fillText("-", nameW + TIME_COL_W, y + ROW_H / 2);
+            ctx.fillText("-", L2.nameW + TIME_COL_W, y + ROW_H / 2);
           }
           ctx.fillStyle = color;
-          ctx.fillText(formatDuration(n.durationMs), nameW + TIME_COL_W * 2 + GAP, y + ROW_H / 2);
+          ctx.fillText(formatDuration(n.durationMs), L2.nameW + TIME_COL_W * 2 + GAP, y + ROW_H / 2);
           ctx.textAlign = "left";
           if (n.exception) {
             ctx.fillStyle = "#e06c6c";
             ctx.font = "10px sans-serif";
-            ctx.fillText("⚠ " + clip(ctx, n.exception, 40), Math.max(x1 + 6, padL), y + ROW_H / 2);
+            ctx.fillText("⚠ " + clip(ctx, n.exception, 40), Math.max(x1 + 6, L2.padL), y + ROW_H / 2);
           }
-        });
+        }
+        ctx.restore();
+        drawHeader(ctx, L2, viewW, sx, x2);
+      }
+      function drawHeader(ctx, L2, viewW, sx, x2) {
+        ctx.fillStyle = C_BG$1;
+        ctx.fillRect(0, 0, viewW, HEAD_H$1);
+        ctx.strokeStyle = "#3c3f41";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, HEAD_H$1 - 0.5);
+        ctx.lineTo(viewW, HEAD_H$1 - 0.5);
+        ctx.stroke();
+        ctx.font = DUR_FONT;
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#8a8a8a";
+        ctx.textAlign = "left";
+        ctx.fillText("方法", 6 - sx, HEAD_H$1 - 14);
+        ctx.textAlign = "right";
+        ctx.fillText("自身", L2.nameW + TIME_COL_W - sx, HEAD_H$1 - 14);
+        ctx.fillText("总耗时", L2.nameW + TIME_COL_W * 2 + GAP - sx, HEAD_H$1 - 14);
+        ctx.textAlign = "left";
+        const step2 = niceStep((L2.maxT - L2.minT) / 6);
+        ctx.font = "10px sans-serif";
+        ctx.fillStyle = "#6a6a6a";
+        for (let t = Math.ceil(L2.minT / step2) * step2; t <= L2.maxT; t += step2) {
+          const tx = x2(t) - sx;
+          if (tx < 0 || tx > viewW) continue;
+          ctx.fillText(formatDurationAxis(t - L2.minT), tx + 2, HEAD_H$1 - 14);
+        }
       }
       function clip(ctx, text, maxW) {
         if (!text) return "";
@@ -69172,10 +69256,12 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
         return s2 + "…";
       }
       function hitTest(ev) {
-        if (!layout2.rows || !layout2.rows.length) return -1;
+        if (!layout2 || !layout2.rows || !layout2.rows.length) return -1;
         const rect = canvasEl.value.getBoundingClientRect();
-        const y = ev.clientY - rect.top;
-        const i = Math.floor((y - PAD_TOP$1) / ROW_H);
+        const yView = ev.clientY - rect.top;
+        if (yView < HEAD_H$1) return -1;
+        const yContent = yView + (scrollEl.value ? scrollEl.value.scrollTop : 0);
+        const i = Math.floor((yContent - PAD_TOP) / ROW_H);
         if (i < 0 || i >= layout2.rows.length) return -1;
         return i;
       }
@@ -69207,34 +69293,53 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
       function onMouseLeave() {
         tip.visible = false;
       }
-      function onResize() {
-        if (props.active) draw();
+      function onScroll() {
+        tip.visible = false;
+        scheduleDraw();
       }
-      watch(() => [props.nodes, props.active], () => {
-        nextTick(draw);
-      }, { deep: true });
+      let ro = null;
+      watch(() => props.nodes, () => {
+        scheduleDraw();
+      });
+      watch(() => props.active, (v2) => {
+        if (v2) nextTick(scheduleDraw);
+      });
       onMounted(() => {
-        window.addEventListener("resize", onResize);
-        nextTick(draw);
+        if (typeof ResizeObserver !== "undefined" && scrollEl.value) {
+          ro = new ResizeObserver(() => scheduleDraw());
+          ro.observe(scrollEl.value);
+        }
+        nextTick(scheduleDraw);
       });
       onBeforeUnmount(() => {
-        window.removeEventListener("resize", onResize);
+        if (ro) {
+          ro.disconnect();
+          ro = null;
+        }
+        cancelPendingDraw();
       });
       return (_ctx, _cache) => {
         return openBlock(), createElementBlock("div", _hoisted_1$6, [
           createBaseVNode("div", {
             ref_key: "scrollEl",
             ref: scrollEl,
-            class: "wf-scroll"
+            class: "wf-scroll",
+            onScroll
           }, [
-            createBaseVNode("canvas", {
-              ref_key: "canvasEl",
-              ref: canvasEl,
-              onClick: onCanvasClick,
-              onMousemove: onMouseMove,
-              onMouseleave: onMouseLeave
-            }, null, 544)
-          ], 512),
+            createBaseVNode("div", {
+              class: "wf-inner",
+              style: normalizeStyle({ width: contentW.value + "px", height: contentH.value + "px" })
+            }, [
+              createBaseVNode("canvas", {
+                ref_key: "canvasEl",
+                ref: canvasEl,
+                class: "wf-canvas",
+                onClick: onCanvasClick,
+                onMousemove: onMouseMove,
+                onMouseleave: onMouseLeave
+              }, null, 544)
+            ], 4)
+          ], 544),
           tip.visible ? (openBlock(), createElementBlock("div", {
             key: 0,
             class: "tip",
@@ -69251,32 +69356,46 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
       };
     }
   };
-  const WaterfallPanel = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["__scopeId", "data-v-1afe3b31"]]);
+  const WaterfallPanel = /* @__PURE__ */ _export_sfc(_sfc_main$6, [["__scopeId", "data-v-3cd47d7e"]]);
   const _hoisted_1$5 = { class: "seq-wrap" };
   const _hoisted_2$5 = { class: "tip-title" };
   const _hoisted_3$5 = { class: "tip-row" };
-  const _hoisted_4$5 = {
+  const _hoisted_4$5 = { class: "tip-row" };
+  const _hoisted_5$4 = {
     key: 0,
     class: "tip-row"
   };
-  const _hoisted_5$4 = {
+  const _hoisted_6$3 = {
     key: 1,
     class: "tip-row caller"
   };
-  const _hoisted_6$3 = {
+  const _hoisted_7$2 = { class: "legend" };
+  const _hoisted_8$2 = {
+    key: 0,
+    class: "trace-id"
+  };
+  const _hoisted_9$2 = {
     key: 1,
     class: "empty"
   };
-  const PAD_TOP = 64;
-  const BOX_H = 30;
-  const ARROW_GAP = 30;
-  const PAD_BOTTOM = 40;
+  const HEAD_H = 46;
+  const BOX_H = 28;
+  const BOX_TOP = 9;
+  const ROW_GAP = 28;
+  const PAD_BOTTOM = 48;
   const MIN_ACTOR_W = 96;
   const ACTOR_GAP = 26;
   const PAD_X = 24;
   const ARROW_H = 8;
+  const BAR_W = 8;
   const LABEL_FONT = "11px ui-monospace, Consolas, Monaco, monospace";
   const LABEL_FONT_TIME = "10px ui-monospace, Consolas, Monaco, monospace";
+  const C_CALL = "#6cb6ff";
+  const C_WARN = "#e0a050";
+  const C_BAD = "#e06c6c";
+  const C_RET = "#8894a3";
+  const C_LIFELINE = "#454a50";
+  const C_BG = "#1e1f22";
   const _sfc_main$5 = {
     __name: "SequencePanel",
     props: {
@@ -69291,7 +69410,19 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
       const canvasEl = /* @__PURE__ */ ref(null);
       const scrollEl = /* @__PURE__ */ ref(null);
       const isEmpty2 = /* @__PURE__ */ ref(true);
-      const tip = /* @__PURE__ */ reactive({ visible: false, x: 0, y: 0, label: "", duration: "", self: "", caller: "" });
+      const contentW = /* @__PURE__ */ ref(0);
+      const contentH = /* @__PURE__ */ ref(0);
+      const tip = /* @__PURE__ */ reactive({
+        visible: false,
+        x: 0,
+        y: 0,
+        label: "",
+        kind: "",
+        duration: "",
+        self: "",
+        caller: ""
+      });
+      const FIRST_ROW_OFFSET = HEAD_H + 30;
       function buildActors(ordered) {
         const seen = /* @__PURE__ */ new Map();
         const actors = [];
@@ -69343,202 +69474,304 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
         });
         return ordered;
       }
-      function buildMessages(ordered, indexOf) {
+      function buildRows(ordered, indexOf) {
         const byId = new Map(ordered.map((n) => [n.spanId, n]));
         const actorOf = (n) => {
           if (!n) return -1;
           const short = (n.className || n.label || "?").split(".").pop();
           return indexOf.has(short) ? indexOf.get(short) : -1;
         };
-        return ordered.map((n) => {
-          const parent2 = n.parentId ? byId.get(n.parentId) : null;
+        const events = [];
+        ordered.forEach((n) => {
+          events.push({ kind: "call", span: n, t: n.start || 0, depth: n.depth || 0 });
+        });
+        ordered.forEach((n) => {
+          const end = n.end != null ? n.end : (n.start || 0) + (n.durationMs || 0);
+          events.push({ kind: "ret", span: n, t: end, depth: n.depth || 0 });
+        });
+        events.sort((a2, b2) => {
+          if (a2.t !== b2.t) return a2.t - b2.t;
+          if (a2.kind !== b2.kind) return a2.kind === "call" ? -1 : 1;
+          if (a2.kind === "ret") return b2.depth - a2.depth;
+          return a2.depth - b2.depth;
+        });
+        return events.map((e) => {
+          const parent2 = e.span.parentId ? byId.get(e.span.parentId) : null;
           const from = actorOf(parent2);
-          const to = actorOf(n);
+          const to = actorOf(e.span);
           return {
-            span: n,
-            to,
+            kind: e.kind,
+            span: e.span,
             from,
-            selfCall: parent2 && from === to
+            to,
+            selfCall: parent2 ? from === to : false,
+            y: 0
           };
         });
       }
-      let layout2 = { actors: [], widths: [], xs: [], messages: [], w: 0, h: 0, rowYs: [] };
-      function computeLayout() {
-        const nodes = props.nodes || [];
+      let layout2 = null;
+      let layoutNodes = null;
+      let probeCtx = null;
+      function computeLayout(nodes) {
         if (!nodes.length) return null;
         const ordered = orderByCallSequence(nodes);
         const { actors, indexOf } = buildActors(ordered);
-        const messages2 = buildMessages(ordered, indexOf);
-        const probe = document.createElement("canvas").getContext("2d");
-        const widths = actorWidths(probe, actors);
+        const rows = buildRows(ordered, indexOf);
+        if (!probeCtx) {
+          probeCtx = document.createElement("canvas").getContext("2d");
+        }
+        const widths = actorWidths(probeCtx, actors);
         const xs = [];
         let cursor = PAD_X;
-        widths.forEach((w2) => {
-          xs.push(cursor + w2 / 2);
-          cursor += w2 + ACTOR_GAP;
+        widths.forEach((w3) => {
+          xs.push(cursor + w3 / 2);
+          cursor += w3 + ACTOR_GAP;
         });
-        const contentW = Math.max(cursor + PAD_X, 480);
-        const rowYs = messages2.map((_2, i) => PAD_TOP + BOX_H + 16 + i * ARROW_GAP);
-        const contentH = PAD_TOP + BOX_H + 16 + messages2.length * ARROW_GAP + PAD_BOTTOM;
-        layout2 = { actors, widths, xs, messages: messages2, w: contentW, h: contentH, rowYs };
+        const w2 = Math.max(cursor + PAD_X, 480);
+        rows.forEach((r, i) => {
+          r.y = FIRST_ROW_OFFSET + i * ROW_GAP;
+        });
+        const h2 = FIRST_ROW_OFFSET + rows.length * ROW_GAP + PAD_BOTTOM;
+        const range2 = /* @__PURE__ */ new Map();
+        rows.forEach((r) => {
+          const cur = range2.get(r.span.spanId) || {};
+          if (r.kind === "call") cur.callY = r.y;
+          else cur.retY = r.y;
+          cur.actor = r.to;
+          cur.span = r.span;
+          range2.set(r.span.spanId, cur);
+        });
+        const byId = new Map(rows.map((r) => [r.span.spanId, r.span]));
+        return { actors, widths, xs, rows, w: w2, h: h2, range: range2, byId };
+      }
+      function ensureLayout(nodes) {
+        if (layoutNodes === nodes && layout2) return layout2;
+        layoutNodes = nodes;
+        layout2 = computeLayout(nodes);
         return layout2;
       }
-      function prepareCanvas2() {
-        var _a2, _b;
-        const canvas = canvasEl.value;
-        const scroll = scrollEl.value;
-        if (!canvas || !scroll) return null;
-        const L2 = layout2;
-        const dpr = window.devicePixelRatio || 1;
-        canvas.style.width = "0px";
-        canvas.style.height = "0px";
-        const viewportW = scroll.clientWidth || ((_a2 = scroll.parentElement) == null ? void 0 : _a2.clientWidth) || 480;
-        const viewportH = scroll.clientHeight || ((_b = scroll.parentElement) == null ? void 0 : _b.clientHeight) || 320;
-        const cssW = Math.max(L2.w, viewportW);
-        const cssH = Math.max(L2.h, viewportH);
-        canvas.width = Math.floor(cssW * dpr);
-        canvas.height = Math.floor(cssH * dpr);
-        canvas.style.width = cssW + "px";
-        canvas.style.height = cssH + "px";
-        const ctx = canvas.getContext("2d");
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx, w: cssW, h: cssH };
+      let rafId = 0;
+      let timerId = 0;
+      function cancelPendingDraw() {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = 0;
+        }
+      }
+      function scheduleDraw() {
+        if (!props.active) return;
+        if (rafId || timerId) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = 0;
+          if (timerId) {
+            clearTimeout(timerId);
+            timerId = 0;
+          }
+          draw();
+        });
+        timerId = setTimeout(() => {
+          timerId = 0;
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = 0;
+          }
+          draw();
+        }, 150);
       }
       function draw() {
-        if (!props.active) return;
-        isEmpty2.value = (props.nodes || []).length === 0;
         const canvas = canvasEl.value;
+        const scroll = scrollEl.value;
+        if (!canvas || !scroll) return;
+        const nodes = props.nodes || [];
+        isEmpty2.value = nodes.length === 0;
+        const viewW = scroll.clientWidth;
+        const viewH = scroll.clientHeight;
+        const ctx = canvas.getContext("2d");
+        if (!viewW || !viewH) return;
+        const dpr = window.devicePixelRatio || 1;
+        const pxW = Math.floor(viewW * dpr);
+        const pxH = Math.floor(viewH * dpr);
+        if (canvas.width !== pxW || canvas.height !== pxH) {
+          canvas.width = pxW;
+          canvas.height = pxH;
+          canvas.style.width = viewW + "px";
+          canvas.style.height = viewH + "px";
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, viewW, viewH);
         if (isEmpty2.value) {
-          if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+          if (contentW.value) contentW.value = 0;
+          if (contentH.value) contentH.value = 0;
           return;
         }
-        computeLayout();
-        const p2 = prepareCanvas2();
-        if (!p2) return;
-        const { ctx, w: W2, h: H } = p2;
-        const L2 = layout2;
-        ctx.clearRect(0, 0, W2, H);
-        const lineTop = PAD_TOP + BOX_H;
-        const lineBottom = H - PAD_BOTTOM + 12;
-        L2.xs.forEach((x2, i) => {
-          ctx.strokeStyle = "#4a4d51";
-          ctx.lineWidth = 1;
-          ctx.setLineDash([4, 4]);
+        const L2 = ensureLayout(nodes);
+        if (!L2) return;
+        if (contentW.value !== L2.w) contentW.value = L2.w;
+        if (contentH.value !== L2.h) contentH.value = L2.h;
+        const sx = scroll.scrollLeft;
+        const sy = scroll.scrollTop;
+        ctx.save();
+        ctx.translate(-sx, -sy);
+        const lineBottom = L2.h - PAD_BOTTOM + 12;
+        ctx.strokeStyle = C_LIFELINE;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        L2.xs.forEach((x2) => {
           ctx.beginPath();
-          ctx.moveTo(x2, lineTop);
+          ctx.moveTo(x2, HEAD_H);
           ctx.lineTo(x2, lineBottom);
           ctx.stroke();
-          ctx.setLineDash([]);
         });
+        ctx.setLineDash([]);
+        L2.range.forEach((r) => {
+          if (r.callY == null || r.retY == null || r.retY - r.callY < 2) return;
+          if (r.retY < sy - ROW_GAP || r.callY > sy + viewH + ROW_GAP) return;
+          if (r.actor < 0) return;
+          const x2 = L2.xs[r.actor] - BAR_W / 2;
+          const y0 = r.callY + 4;
+          const y1 = r.retY - 4;
+          const exc = r.span.exception;
+          ctx.fillStyle = exc ? "rgba(224, 108, 108, 0.18)" : "rgba(108, 182, 255, 0.13)";
+          ctx.fillRect(x2, y0, BAR_W, Math.max(2, y1 - y0));
+          ctx.strokeStyle = exc ? "rgba(224, 108, 108, 0.55)" : "rgba(108, 182, 255, 0.45)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x2 + 0.5, y0 + 0.5, BAR_W - 1, Math.max(2, y1 - y0) - 1);
+        });
+        const i0 = Math.max(0, Math.floor((sy - ROW_GAP - FIRST_ROW_OFFSET) / ROW_GAP));
+        const i1 = Math.min(L2.rows.length - 1, Math.ceil((sy + viewH + ROW_GAP - FIRST_ROW_OFFSET) / ROW_GAP));
+        for (let i = i0; i <= i1; i++) {
+          const r = L2.rows[i];
+          if (i < 0) continue;
+          if (r.kind === "call") drawCall(ctx, L2, r);
+          else drawReturn(ctx, L2, r);
+        }
+        ctx.restore();
+        drawHeader(ctx, L2, viewW, sx);
+      }
+      function drawHeader(ctx, L2, viewW, sx) {
+        ctx.fillStyle = C_BG;
+        ctx.fillRect(0, 0, viewW, HEAD_H - 6);
+        ctx.strokeStyle = "#3c3f41";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, HEAD_H - 6.5);
+        ctx.lineTo(viewW, HEAD_H - 6.5);
+        ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
         L2.actors.forEach((a2, i) => {
           const w2 = L2.widths[i];
-          const x2 = L2.xs[i] - w2 / 2;
+          const cx = L2.xs[i] - sx;
+          const x2 = cx - w2 / 2;
+          if (x2 + w2 < 0 || x2 > viewW) return;
           ctx.fillStyle = "#2f3b4d";
           ctx.strokeStyle = "#4d6a8f";
           ctx.lineWidth = 1;
-          roundRect(ctx, x2, PAD_TOP, w2, BOX_H, 4);
+          roundRect(ctx, x2, BOX_TOP, w2, BOX_H, 4);
           ctx.fill();
           ctx.stroke();
           ctx.fillStyle = "#dbe4f0";
           ctx.font = "bold " + LABEL_FONT;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          let label = a2.name;
-          const maxW = w2 - 14;
-          if (ctx.measureText(label).width > maxW) {
-            while (label.length > 2 && ctx.measureText(label + "…").width > maxW) {
-              label = label.slice(0, -1);
-            }
-            label += "…";
-          }
-          ctx.fillText(label, L2.xs[i], PAD_TOP + BOX_H / 2);
-          ctx.textAlign = "left";
+          ctx.fillText(clip(ctx, a2.name, w2 - 14), cx, BOX_TOP + BOX_H / 2);
         });
-        L2.messages.forEach((m2, i) => {
-          const y = L2.rowYs[i];
-          if (y > H - 8) return;
-          const toX = L2.xs[m2.to];
-          const span = m2.span;
-          if (m2.selfCall) {
-            drawSelfMessage(ctx, toX, y, span);
-            return;
-          }
-          const fromX = m2.from >= 0 ? L2.xs[m2.from] : Math.max(8, toX - 90);
-          drawArrow(ctx, fromX, toX, y, span);
-        });
-        ctx.fillStyle = "#6a6a6a";
-        ctx.font = LABEL_FONT_TIME;
         ctx.textAlign = "left";
-        ctx.fillText("调用链: " + props.traceId, 8, 16);
       }
-      function drawArrow(ctx, x0, x1, y, span) {
+      function drawCall(ctx, L2, r) {
+        const span = r.span;
+        const toX = r.to >= 0 ? L2.xs[r.to] : L2.xs[0] || 60;
         const dur = span.durationMs;
-        const color = span.exception ? "#e06c6c" : dur != null && dur >= 1e3 ? "#e06c6c" : dur != null && dur >= 300 ? "#e0a050" : "#6cb6ff";
+        const color = span.exception ? C_BAD : dur != null && dur >= 1e3 ? C_BAD : dur != null && dur >= 300 ? C_WARN : C_CALL;
+        if (r.selfCall) {
+          drawSelfLoop(ctx, L2.xs[r.to], r.y, color, false);
+          labelAt(ctx, L2.xs[r.to] + 38, r.y, span.method || "?", formatDuration(dur), "#d0d0d0");
+          return;
+        }
+        const fromX = r.from >= 0 ? L2.xs[r.from] : Math.max(8, toX - 110);
+        drawArrowLine(ctx, fromX, toX, r.y, color, false);
+        const midX = (fromX + toX) / 2;
+        labelCentered(ctx, midX, r.y, fromX, toX, span.method || "?", formatDuration(dur), "#d0d0d0");
+      }
+      function drawReturn(ctx, L2, r) {
+        const span = r.span;
+        const fromX = r.to >= 0 ? L2.xs[r.to] : L2.xs[0] || 60;
+        const color = span.exception ? C_BAD : C_RET;
+        if (r.selfCall) {
+          drawSelfLoop(ctx, L2.xs[r.to], r.y, color, true);
+          return;
+        }
+        const toX = r.from >= 0 ? L2.xs[r.from] : Math.max(8, fromX - 110);
+        drawArrowLine(ctx, fromX, toX, r.y, color, true);
+        const text = span.exception ? "↩ 异常抛出" : "↩ 返回";
+        const wide = Math.abs(toX - fromX) > 96;
+        labelCentered(ctx, (fromX + toX) / 2, r.y, fromX, toX, wide ? text : "↩", "", color);
+      }
+      function drawArrowLine(ctx, x0, x1, y, color, dashed) {
         const rightward = x1 >= x0;
-        const xa = x0 + (rightward ? 6 : -6);
-        const xb = x1 - (rightward ? 6 : -6);
+        const dir = rightward ? 1 : -1;
+        const xa = x0 + dir * 4;
+        const xb = x1 - dir * 6;
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = dashed ? 1 : 1.2;
+        if (dashed) ctx.setLineDash([5, 4]);
         ctx.beginPath();
         ctx.moveTo(xa, y);
         ctx.lineTo(xb, y);
         ctx.stroke();
-        const dir = rightward ? 1 : -1;
+        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(xb, y);
         ctx.lineTo(xb - dir * ARROW_H, y - ARROW_H * 0.5);
         ctx.lineTo(xb - dir * ARROW_H, y + ARROW_H * 0.5);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "#d0d0d0";
-        ctx.font = LABEL_FONT;
-        ctx.textBaseline = "bottom";
-        const name = span.method || span.label || "?";
-        const midX = (xa + xb) / 2;
-        const text = name;
-        const tw = ctx.measureText(text).width;
-        const labelX = tw + 10 > Math.abs(xb - xa) ? Math.max(xa, xb) + 8 : midX - tw / 2;
-        ctx.textAlign = "left";
-        ctx.fillText(text, labelX, y - 2);
-        if (dur != null) {
-          const durText = formatDuration(dur);
-          ctx.fillStyle = "#8a8a8a";
-          ctx.font = LABEL_FONT_TIME;
-          ctx.fillText("(" + durText + ")", labelX + tw + 4, y - 2);
-        }
-        ctx.textBaseline = "middle";
       }
-      function drawSelfMessage(ctx, x2, y, span) {
-        const dur = span.durationMs;
-        const color = span.exception ? "#e06c6c" : dur != null && dur >= 1e3 ? "#e06c6c" : dur != null && dur >= 300 ? "#e0a050" : "#6cb6ff";
-        const loopW = 30, loopH = 12;
+      function drawSelfLoop(ctx, x2, y, color, dashed) {
+        const loopW = 30;
+        const loopH = 12;
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = dashed ? 1 : 1.2;
+        if (dashed) ctx.setLineDash([5, 4]);
         ctx.beginPath();
         ctx.moveTo(x2, y - loopH / 2);
         ctx.lineTo(x2 + loopW, y - loopH / 2);
         ctx.lineTo(x2 + loopW, y + loopH / 2);
         ctx.lineTo(x2 + 6, y + loopH / 2);
         ctx.stroke();
+        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(x2 + 6, y + loopH / 2);
         ctx.lineTo(x2 + 6 + ARROW_H, y + loopH / 2 - ARROW_H * 0.5);
         ctx.lineTo(x2 + 6 + ARROW_H, y + loopH / 2 + ARROW_H * 0.5);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "#d0d0d0";
+      }
+      function labelCentered(ctx, midX, y, xa, xb, name, durText, color) {
         ctx.font = LABEL_FONT;
-        ctx.textBaseline = "bottom";
+        const tw = ctx.measureText(name).width;
+        const durW = durText ? ctx.measureText("(" + durText + ")").width + 4 : 0;
+        const totalW = tw + durW;
+        const span = Math.abs(xb - xa);
+        let x2 = totalW + 8 <= span ? midX - totalW / 2 : Math.max(xa, xb) + 8;
+        x2 = Math.max(4, x2);
+        labelAt(ctx, x2, y, name, durText, color);
+      }
+      function labelAt(ctx, x2, y, name, durText, color) {
         ctx.textAlign = "left";
-        const name = span.method || "?";
-        ctx.fillText(name, x2 + loopW + 8, y - 2);
-        if (dur != null) {
+        ctx.textBaseline = "bottom";
+        ctx.font = LABEL_FONT;
+        ctx.fillStyle = color;
+        ctx.fillText(name, x2, y - 2);
+        if (durText) {
           const tw = ctx.measureText(name).width;
-          ctx.fillStyle = "#8a8a8a";
           ctx.font = LABEL_FONT_TIME;
-          ctx.fillText("(" + formatDuration(dur) + ")", x2 + loopW + 8 + tw + 4, y - 2);
+          ctx.fillStyle = "#8a8a8a";
+          ctx.fillText("(" + durText + ")", x2 + tw + 4, y - 2);
         }
         ctx.textBaseline = "middle";
       }
@@ -69555,62 +69788,83 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
         ctx.quadraticCurveTo(x2, y, x2 + r, y);
         ctx.closePath();
       }
+      function clip(ctx, text, maxW) {
+        if (!text) return "";
+        if (ctx.measureText(text).width <= maxW) return text;
+        let s2 = text;
+        while (s2.length > 1 && ctx.measureText(s2 + "…").width > maxW) {
+          s2 = s2.slice(0, -1);
+        }
+        return s2 + "…";
+      }
       function hitTest(ev) {
-        if (!layout2.messages || !layout2.rowYs) return -1;
-        const rect = canvasEl.value.getBoundingClientRect();
-        const y = ev.clientY - rect.top;
-        const step2 = ARROW_GAP;
-        const firstY = layout2.rowYs[0];
-        if (firstY == null) return -1;
-        const i = Math.round((y - firstY) / step2);
-        if (i < 0 || i >= layout2.messages.length) return -1;
-        if (Math.abs(layout2.rowYs[i] - y) > step2 * 0.45) return -1;
+        if (!layout2 || !layout2.rows || !layout2.rows.length) return -1;
+        const canvas = canvasEl.value;
+        const scroll = scrollEl.value;
+        const rect = canvas.getBoundingClientRect();
+        const yView = ev.clientY - rect.top;
+        if (yView < HEAD_H) return -1;
+        const yContent = yView + (scroll ? scroll.scrollTop : 0);
+        const i = Math.round((yContent - FIRST_ROW_OFFSET) / ROW_GAP);
+        if (i < 0 || i >= layout2.rows.length) return -1;
+        if (Math.abs(FIRST_ROW_OFFSET + i * ROW_GAP - yContent) > ROW_GAP * 0.45) return -1;
         return i;
       }
       function onCanvasClick(ev) {
         if (!props.active) return;
         const i = hitTest(ev);
         if (i < 0) return;
-        emit2("jump", layout2.messages[i].span);
+        emit2("jump", layout2.rows[i].span);
       }
       function onMouseMove(ev) {
-        var _a2, _b;
+        var _a2;
         if (!props.active) return;
         const i = hitTest(ev);
         if (i < 0) {
           tip.visible = false;
           return;
         }
-        const m2 = layout2.messages[i];
-        const n = m2.span;
+        const r = layout2.rows[i];
+        const n = r.span;
         const wrap = (_a2 = canvasEl.value) == null ? void 0 : _a2.closest(".seq-wrap");
         const wrapRect = wrap ? wrap.getBoundingClientRect() : { left: 0, top: 0 };
         tip.visible = true;
         tip.x = ev.clientX - wrapRect.left + 14;
         tip.y = ev.clientY - wrapRect.top + 12;
         tip.label = (n.className ? n.className.split(".").pop() + "#" : "") + (n.method || "?");
+        tip.kind = r.kind === "call" ? "调用" : "返回";
         tip.duration = formatDuration(n.durationMs);
         tip.self = n.selfMs != null && n.childCount > 0 ? formatDuration(n.selfMs) : "";
-        tip.caller = n.parentId ? ((_b = layout2.messages.find((x2) => x2.span.spanId === n.parentId)) == null ? void 0 : _b.span.method) || "" : "请求入口";
+        const parentNode = n.parentId ? layout2.byId.get(n.parentId) : null;
+        tip.caller = parentNode ? (parentNode.className ? parentNode.className.split(".").pop() + "#" : "") + (parentNode.method || "?") : "请求入口";
       }
       function onMouseLeave() {
         tip.visible = false;
       }
       function onScroll() {
         tip.visible = false;
+        scheduleDraw();
       }
-      function onResize() {
-        if (props.active) draw();
-      }
-      watch(() => [props.nodes, props.active], () => {
-        nextTick(draw);
-      }, { deep: true });
+      let ro = null;
+      watch(() => props.nodes, () => {
+        scheduleDraw();
+      });
+      watch(() => props.active, (v2) => {
+        if (v2) nextTick(scheduleDraw);
+      });
       onMounted(() => {
-        window.addEventListener("resize", onResize);
-        nextTick(draw);
+        if (typeof ResizeObserver !== "undefined" && scrollEl.value) {
+          ro = new ResizeObserver(() => scheduleDraw());
+          ro.observe(scrollEl.value);
+        }
+        nextTick(scheduleDraw);
       });
       onBeforeUnmount(() => {
-        window.removeEventListener("resize", onResize);
+        if (ro) {
+          ro.disconnect();
+          ro = null;
+        }
+        cancelPendingDraw();
       });
       return (_ctx, _cache) => {
         return openBlock(), createElementBlock("div", _hoisted_1$5, [
@@ -69620,13 +69874,19 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
             class: "seq-scroll",
             onScroll
           }, [
-            createBaseVNode("canvas", {
-              ref_key: "canvasEl",
-              ref: canvasEl,
-              onClick: onCanvasClick,
-              onMousemove: onMouseMove,
-              onMouseleave: onMouseLeave
-            }, null, 544)
+            createBaseVNode("div", {
+              class: "seq-inner",
+              style: normalizeStyle({ width: contentW.value + "px", height: contentH.value + "px" })
+            }, [
+              createBaseVNode("canvas", {
+                ref_key: "canvasEl",
+                ref: canvasEl,
+                class: "seq-canvas",
+                onClick: onCanvasClick,
+                onMousemove: onMouseMove,
+                onMouseleave: onMouseLeave
+              }, null, 544)
+            ], 4)
           ], 544),
           tip.visible ? (openBlock(), createElementBlock("div", {
             key: 0,
@@ -69634,20 +69894,22 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
             style: normalizeStyle({ left: tip.x + "px", top: tip.y + "px" })
           }, [
             createBaseVNode("div", _hoisted_2$5, toDisplayString(tip.label), 1),
-            createBaseVNode("div", _hoisted_3$5, "耗时 " + toDisplayString(tip.duration), 1),
-            tip.self ? (openBlock(), createElementBlock("div", _hoisted_4$5, "自身 " + toDisplayString(tip.self), 1)) : createCommentVNode("", true),
-            tip.caller ? (openBlock(), createElementBlock("div", _hoisted_5$4, "调用方 " + toDisplayString(tip.caller), 1)) : createCommentVNode("", true)
+            createBaseVNode("div", _hoisted_3$5, toDisplayString(tip.kind), 1),
+            createBaseVNode("div", _hoisted_4$5, "耗时 " + toDisplayString(tip.duration), 1),
+            tip.self ? (openBlock(), createElementBlock("div", _hoisted_5$4, "自身 " + toDisplayString(tip.self), 1)) : createCommentVNode("", true),
+            tip.caller ? (openBlock(), createElementBlock("div", _hoisted_6$3, "调用方 " + toDisplayString(tip.caller), 1)) : createCommentVNode("", true)
           ], 4)) : createCommentVNode("", true),
-          _cache[0] || (_cache[0] = createBaseVNode("div", { class: "legend" }, [
-            createTextVNode(" 时序图：顶部为参与者，竖线为生命线，箭头表示调用、自上而下为时间顺序 "),
-            createBaseVNode("span", { class: "hint" }, "（可横向 / 纵向滚动）")
-          ], -1)),
-          isEmpty2.value ? (openBlock(), createElementBlock("div", _hoisted_6$3, "暂无数据，点击「加载真实数据」或「加载示例数据」")) : createCommentVNode("", true)
+          createBaseVNode("div", _hoisted_7$2, [
+            _cache[0] || (_cache[0] = createTextVNode(" 时序图：实线＝调用，虚线＝返回，自上而下为时间顺序 ", -1)),
+            _cache[1] || (_cache[1] = createBaseVNode("span", { class: "hint" }, "（可横向 / 纵向滚动）", -1)),
+            __props.traceId ? (openBlock(), createElementBlock("span", _hoisted_8$2, toDisplayString(__props.traceId), 1)) : createCommentVNode("", true)
+          ]),
+          isEmpty2.value ? (openBlock(), createElementBlock("div", _hoisted_9$2, "暂无数据，点击「加载真实数据」或「加载示例数据」")) : createCommentVNode("", true)
         ]);
       };
     }
   };
-  const SequencePanel = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["__scopeId", "data-v-f5edeeff"]]);
+  const SequencePanel = /* @__PURE__ */ _export_sfc(_sfc_main$5, [["__scopeId", "data-v-4d1e64a1"]]);
   const _hoisted_1$4 = { class: "table-wrap" };
   const _hoisted_2$4 = {
     key: 0,
@@ -71512,7 +71774,7 @@ usage: app.provide(ZINDEX_INJECTION_KEY, { current: 0 })`);
       };
     }
   };
-  const App = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-23c4a692"]]);
+  const App = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-5b3ceff0"]]);
   const app = createApp(App);
   app.use(element_plus_default, { locale: zh_cn_default });
   app.mount("#app");
